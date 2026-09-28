@@ -14,6 +14,7 @@ import {
   ArrowRight,
   User,
   Phone,
+  Utensils,
 } from 'lucide-react';
 
 interface Props {
@@ -180,9 +181,11 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill }: Props) {
                   </p>
                 )}
               </div>
-              <span className="font-mono font-bold text-brand-green text-xs shrink-0">
-                ₹{(item.price * item.quantity).toFixed(0)}
-              </span>
+              {!isChef && (
+                <span className="font-mono font-bold text-brand-green text-xs shrink-0">
+                  ₹{(item.price * item.quantity).toFixed(0)}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -190,18 +193,27 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill }: Props) {
 
       {/* Bottom Action Footer */}
       <div className="p-3.5 sm:p-4 border-t border-brand-beige-dark/60 bg-brand-beige-light/30 flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <span className="text-[10px] uppercase font-bold text-brand-green/40 block">
-            Total Amount
-          </span>
-          <span className="font-mono font-black text-base text-brand-green">
-            ₹{order.total.toFixed(0)}
-          </span>
-        </div>
+        {!isChef ? (
+          <div>
+            <span className="text-[10px] uppercase font-bold text-brand-green/40 block">
+              Total Amount
+            </span>
+            <span className="font-mono font-black text-base text-brand-green">
+              ₹{order.total.toFixed(0)}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 py-1">
+            <Utensils className="w-3.5 h-3.5 text-brand-green/50" />
+            <span className="text-xs font-bold text-brand-green/80">
+              {order.items.reduce((s, i) => s + i.quantity, 0)} items to prep
+            </span>
+          </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {onOpenBill && (
+          {!isChef && onOpenBill && (
             <button
               type="button"
               onClick={() => onOpenBill(order.id)}
@@ -256,7 +268,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill }: Props) {
               type="button"
               disabled={isUpdating}
               onClick={handleNextAction}
-              className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 min-h-[40px]"
+              className="px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 min-h-[44px] min-w-[130px] touch-manipulation"
             >
               {isUpdating ? (
                 <span>Updating...</span>

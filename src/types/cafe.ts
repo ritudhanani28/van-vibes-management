@@ -45,6 +45,7 @@ export interface MenuItem {
   addOns?: MenuItemAddOn[];
   image?: string;
   popular?: boolean;
+  isAvailable?: boolean;
 }
 
 export interface MenuCategory {

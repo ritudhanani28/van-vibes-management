@@ -95,7 +95,7 @@ export default function AdminDashboardPage() {
               Admin Operations Dashboard
             </h1>
             <p className="text-xs text-brand-green/70 mt-0.5">
-              Live floor overview, kitchen queue, revenue settlement, and table management.
+              Live floor overview, active orders, revenue settlement, and table management.
             </p>
           </div>
 

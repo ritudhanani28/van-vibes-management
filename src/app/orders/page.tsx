@@ -6,9 +6,12 @@ import { OrderCard } from '@/components/orders/OrderCard';
 import { BillModal } from '@/components/billing/BillModal';
 import { Order, OrderStatus } from '@/types/cafe';
 import { CafeStore } from '@/lib/cafe-store';
+import { useAuth } from '@/context/AuthContext';
 import { Search, Filter, RefreshCw, ShoppingBag } from 'lucide-react';
 
 export default function OrdersPage() {
+  const { role } = useAuth();
+  const isChef = role === 'CHEF';
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL');
   const [tableFilter, setTableFilter] = useState<string>('ALL');
@@ -60,10 +63,10 @@ export default function OrdersPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
-              Orders Queue & History
+              Orders Management & History
             </h1>
             <p className="text-xs text-brand-green/70 mt-0.5">
-              Filter by table, stage progression, customer details, and invoice receipts.
+              {isChef ? 'Filter kitchen orders by table, preparation stage, and search keywords.' : 'Filter orders by table, stage progression, customer details, and invoice receipts.'}
             </p>
           </div>
 
@@ -148,7 +151,7 @@ export default function OrdersPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
-                  onOpenBill={(id) => setSelectedBillOrderId(id)}
+                  onOpenBill={isChef ? undefined : (id) => setSelectedBillOrderId(id)}
                 />
               ))}
             </div>
@@ -157,7 +160,7 @@ export default function OrdersPage() {
       </div>
 
       {/* Bill Receipt Modal */}
-      {selectedBillOrderId && (
+      {!isChef && selectedBillOrderId && (
         <BillModal
           orderId={selectedBillOrderId}
           onClose={() => setSelectedBillOrderId(null)}

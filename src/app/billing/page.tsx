@@ -5,7 +5,6 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { BillModal } from '@/components/billing/BillModal';
 import { Order } from '@/types/cafe';
 import { CafeStore } from '@/lib/cafe-store';
-import { useAuth } from '@/context/AuthContext';
 import {
   Receipt,
   DollarSign,
@@ -18,8 +17,6 @@ import {
 } from 'lucide-react';
 
 export default function BillingPage() {
-  const { role } = useAuth();
-  const isAdmin = role === 'ADMIN';
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -53,24 +50,22 @@ export default function BillingPage() {
   });
 
   return (
-    <AppLayout>
+    <AppLayout requiredRole="ADMIN">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
-              {isAdmin ? 'Billing & Revenue Ledger' : 'Kitchen Invoicing & Receipts'}
+              Billing & Revenue Ledger
             </h1>
             <p className="text-xs text-brand-green/70 mt-0.5">
-              {isAdmin
-                ? 'Itemized receipts, GST breakdown, customer invoices, and POS records.'
-                : 'Operational receipts and bill copies for kitchen dispatched items.'}
+              Itemized receipts, GST breakdown, customer invoices, and POS records.
             </p>
           </div>
         </div>
 
         {/* Admin Financial Summary Metrics */}
-        {isAdmin && (
+        
           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
               <span className="text-[10px] uppercase font-black text-brand-green/50 tracking-wider">
@@ -112,7 +107,6 @@ export default function BillingPage() {
               <p className="text-[11px] text-brand-green/60">Collected total</p>
             </div>
           </div>
-        )}
 
         {/* Invoices List Table */}
         <div className="bg-white rounded-2xl border border-brand-beige-dark shadow-xs overflow-hidden">

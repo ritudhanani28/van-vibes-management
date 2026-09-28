@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/components/orders/OrderCard';
-import { BillModal } from '@/components/billing/BillModal';
 import { Order, OrderStatus } from '@/types/cafe';
 import { CafeStore } from '@/lib/cafe-store';
 import {
@@ -20,7 +19,6 @@ import {
 export default function ChefKDSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [chimeEnabled, setChimeEnabled] = useState(true);
-  const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadOrders = useCallback(() => {
@@ -74,7 +72,7 @@ export default function ChefKDSPage() {
                 </span>
               </div>
               <p className="text-xs text-brand-beige-muted mt-0.5">
-                Real-time tickets, preparation queues, and rapid dispatch
+                Real-time tickets, preparation line, and rapid dispatch
               </p>
             </div>
           </div>
@@ -98,7 +96,7 @@ export default function ChefKDSPage() {
               onClick={loadOrders}
               disabled={isRefreshing}
               className="p-2 rounded-xl bg-brand-green-light hover:bg-brand-green-surface text-brand-beige transition-colors disabled:opacity-50"
-              title="Refresh Queue"
+              title="Refresh Tickets"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
@@ -165,7 +163,6 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
-                  onOpenBill={(id) => setSelectedBillOrderId(id)}
                 />
               ))}
             </div>
@@ -183,7 +180,7 @@ export default function ChefKDSPage() {
           {inKitchen.length === 0 ? (
             <div className="p-8 rounded-2xl bg-white border border-brand-beige-dark text-center space-y-1">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-              <p className="font-bold text-sm text-brand-green">Kitchen Queue Clear</p>
+              <p className="font-bold text-sm text-brand-green">Kitchen Line Clear</p>
               <p className="text-xs text-brand-green/60">
                 All accepted tickets are prepared and served!
               </p>
@@ -195,7 +192,6 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
-                  onOpenBill={(id) => setSelectedBillOrderId(id)}
                 />
               ))}
             </div>
@@ -217,7 +213,6 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
-                  onOpenBill={(id) => setSelectedBillOrderId(id)}
                 />
               ))}
             </div>
@@ -225,13 +220,6 @@ export default function ChefKDSPage() {
         )}
       </div>
 
-      {/* Bill Receipt Modal */}
-      {selectedBillOrderId && (
-        <BillModal
-          orderId={selectedBillOrderId}
-          onClose={() => setSelectedBillOrderId(null)}
-        />
-      )}
     </AppLayout>
   );
 }

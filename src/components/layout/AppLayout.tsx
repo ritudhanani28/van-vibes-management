@@ -11,7 +11,6 @@ import {
   ShoppingBag,
   Receipt,
   QrCode,
-  Users,
   Settings,
   UserCheck,
   LogOut,
@@ -48,17 +47,17 @@ const NAV_ITEMS: NavItem[] = [
   },
   // Orders Management (Both)
   {
-    name: 'Orders Queue',
+    name: 'Orders',
     href: '/orders',
     icon: ShoppingBag,
     roles: ['ADMIN', 'CHEF'],
   },
-  // Billing & Settlement
+  // Billing & Settlement (Admin Only)
   {
     name: 'Billing & POS',
     href: '/billing',
     icon: Receipt,
-    roles: ['ADMIN', 'CHEF'],
+    roles: ['ADMIN'],
   },
   // Tables & QR (Admin Only)
   {
@@ -72,13 +71,6 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Menu Catalog',
     href: '/menu-items',
     icon: UtensilsCrossed,
-    roles: ['ADMIN'],
-  },
-  // Staff (Admin Only)
-  {
-    name: 'Staff Roster',
-    href: '/staff',
-    icon: Users,
     roles: ['ADMIN'],
   },
   // Settings (Admin Only)
