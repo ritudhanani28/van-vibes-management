@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MENU_CATEGORIES, MENU_ITEMS } from '@/data/vaan-vibes-menu';
 import { MenuItem } from '@/types/cafe';
@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   X,
   CheckCircle2,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 
 export default function MenuItemsAdminPage() {
@@ -25,6 +27,11 @@ export default function MenuItemsAdminPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+
+  // Custom Category Dropdown State
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [categorySearchText, setCategorySearchText] = useState("");
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Modal States
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -44,10 +51,16 @@ export default function MenuItemsAdminPage() {
 
   // Close dropdown on click outside or escape key
   useEffect(() => {
-    const handleGlobalClick = () => setActiveDropdownId(null);
+    const handleGlobalClick = (e: MouseEvent) => {
+      setActiveDropdownId(null);
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setIsCategoryOpen(false);
+      }
+    };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setActiveDropdownId(null);
+        setIsCategoryOpen(false);
         setEditingItem(null);
         setDeletingItem(null);
         setIsAddModalOpen(false);
@@ -137,6 +150,18 @@ export default function MenuItemsAdminPage() {
     return item.name.toLowerCase().includes(q);
   });
 
+  const currentCategory = MENU_CATEGORIES.find((c) => c.slug === selectedCategory);
+  const selectedCategoryCount =
+    selectedCategory === "all"
+      ? `${items.length} dishes`
+      : `${items.filter((i) => i.category === selectedCategory).length} dishes`;
+
+  const filteredCategoryList = MENU_CATEGORIES.filter((c) => {
+    if (c.id === "all") return false;
+    if (!categorySearchText.trim()) return true;
+    return c.name.toLowerCase().includes(categorySearchText.toLowerCase().trim());
+  });
+
   return (
     <AppLayout requiredRole="ADMIN">
       <div className="space-y-5">
@@ -182,19 +207,148 @@ export default function MenuItemsAdminPage() {
               />
             </div>
 
-            <div className="w-full sm:w-64">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
+            {/* Custom Category Selection Menu */}
+            <div className="w-full sm:w-72 relative" ref={categoryDropdownRef}>
+              <button
+                type="button"
+                id="category-dropdown-button"
+                aria-haspopup="listbox"
+                aria-expanded={isCategoryOpen}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCategoryOpen(!isCategoryOpen);
+                }}
+                className="w-full px-3.5 py-2 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige-light/40 text-xs font-bold text-brand-green flex items-center justify-between gap-2 shadow-2xs transition-all focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
               >
-                <option value="all">All Categories ({items.length} dishes)</option>
-                {MENU_CATEGORIES.filter((c) => c.id !== "all").map((c) => (
-                  <option key={c.id} value={c.slug}>
-                    {c.name} ({items.filter((i) => i.category === c.slug).length})
-                  </option>
-                ))}
-              </select>
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-base leading-none shrink-0">
+                    {selectedCategory === "all" ? "🍽️" : currentCategory?.icon || "☕"}
+                  </span>
+                  <span className="truncate">
+                    {selectedCategory === "all" ? "All Categories" : currentCategory?.name}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-brand-green/10 text-brand-green/70 shrink-0">
+                    {selectedCategoryCount}
+                  </span>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-brand-green/60 shrink-0 transition-transform duration-200 ${
+                    isCategoryOpen ? "rotate-180 text-brand-green" : ""
+                  }`}
+                />
+              </button>
+
+              {/* Custom Category Dropdown Listbox */}
+              {isCategoryOpen && (
+                <div
+                  role="listbox"
+                  aria-labelledby="category-dropdown-button"
+                  className="absolute right-0 left-0 sm:left-auto sm:w-80 top-11 z-40 bg-white rounded-2xl shadow-xl border border-brand-beige-dark overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Category Search Input */}
+                  <div className="p-2 border-b border-brand-beige-dark/60 bg-brand-beige-light/40">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-green/40" />
+                      <input
+                        type="text"
+                        value={categorySearchText}
+                        onChange={(e) => setCategorySearchText(e.target.value)}
+                        placeholder="Search categories..."
+                        className="w-full pl-8 pr-2.5 py-1.5 rounded-lg border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 bg-white focus:outline-none focus:ring-1 focus:ring-brand-green"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Scrollable Category Options */}
+                  <div className="max-h-72 overflow-y-auto divide-y divide-brand-beige-dark/20 p-1">
+                    {/* All Categories Option */}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selectedCategory === "all"}
+                      onClick={() => {
+                        setSelectedCategory("all");
+                        setIsCategoryOpen(false);
+                        setCategorySearchText("");
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${
+                        selectedCategory === "all"
+                          ? "bg-brand-green text-brand-beige font-bold shadow-2xs"
+                          : "text-brand-green hover:bg-brand-beige-light/70 font-semibold"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-base leading-none">🍽️</span>
+                        <span>All Categories</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                            selectedCategory === "all"
+                              ? "bg-brand-gold text-brand-green"
+                              : "bg-brand-beige text-brand-green/70"
+                          }`}
+                        >
+                          {items.length} dishes
+                        </span>
+                        {selectedCategory === "all" && (
+                          <Check className="w-3.5 h-3.5 text-brand-gold" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Specific Categories */}
+                    {filteredCategoryList.map((cat) => {
+                      const isSelected = selectedCategory === cat.slug;
+                      const count = items.filter((i) => i.category === cat.slug).length;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            setSelectedCategory(cat.slug);
+                            setIsCategoryOpen(false);
+                            setCategorySearchText("");
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${
+                            isSelected
+                              ? "bg-brand-green text-brand-beige font-bold shadow-2xs"
+                              : "text-brand-green hover:bg-brand-beige-light/70 font-semibold"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-base leading-none">{cat.icon || "☕"}</span>
+                            <span>{cat.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                isSelected
+                                  ? "bg-brand-gold text-brand-green"
+                                  : "bg-brand-beige text-brand-green/70"
+                              }`}
+                            >
+                              {count} dishes
+                            </span>
+                            {isSelected && (
+                              <Check className="w-3.5 h-3.5 text-brand-gold" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {filteredCategoryList.length === 0 && (
+                      <div className="p-4 text-center text-xs text-brand-green/60">
+                        No categories found matching &quot;{categorySearchText}&quot;
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
