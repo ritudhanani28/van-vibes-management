@@ -163,6 +163,7 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
+                  isKitchenView
                 />
               ))}
             </div>
@@ -192,6 +193,7 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
+                  isKitchenView
                 />
               ))}
             </div>
@@ -213,6 +215,7 @@ export default function ChefKDSPage() {
                   key={order.id}
                   order={order}
                   onUpdateStatus={handleUpdateStatus}
+                  isKitchenView
                 />
               ))}
             </div>

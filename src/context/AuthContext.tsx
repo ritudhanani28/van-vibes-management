@@ -118,6 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (requiredRole?: UserRole | UserRole[]) => {
       if (!user) return false;
       if (!requiredRole) return true;
+      // Admin has full clearance across all management and operational portals (including Chef Board)
+      if (user.role === 'ADMIN') return true;
       if (Array.isArray(requiredRole)) {
         return requiredRole.includes(user.role);
       }

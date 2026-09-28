@@ -21,11 +21,12 @@ interface Props {
   order: Order;
   onUpdateStatus: (orderId: string, nextStatus: OrderStatus) => Promise<void>;
   onOpenBill?: (orderId: string) => void;
+  isKitchenView?: boolean;
 }
 
-export function OrderCard({ order, onUpdateStatus, onOpenBill }: Props) {
+export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: Props) {
   const { role } = useAuth();
-  const isChef = role === 'CHEF';
+  const isChef = role === 'CHEF' || !!isKitchenView;
   const [isUpdating, setIsUpdating] = useState(false);
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
 

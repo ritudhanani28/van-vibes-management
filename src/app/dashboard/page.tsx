@@ -201,9 +201,6 @@ export default function AdminDashboardPage() {
                 ['ALL', 'All Orders'],
                 ['ORDER_PLACED', 'Placed'],
                 ['ACCEPTED', 'Accepted'],
-                ['PREPARING', 'Preparing'],
-                ['READY', 'Ready'],
-                ['COMPLETED', 'Completed'],
                 ['CANCELLED', 'Cancelled'],
               ] as const
             ).map(([status, label]) => (
