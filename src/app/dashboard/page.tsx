@@ -108,13 +108,7 @@ export default function AdminDashboardPage() {
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
-            <Link
-              href="/chef"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold shadow-xs transition-all active:scale-95"
-            >
-              <ChefHat className="w-3.5 h-3.5 text-brand-gold" />
-              <span>Open Kitchen KDS</span>
-            </Link>
+
           </div>
         </div>
 
