@@ -134,17 +134,14 @@ export default function MenuItemsAdminPage() {
     if (selectedCategory !== "all" && item.category !== selectedCategory) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
-    return (
-      item.name.toLowerCase().includes(q) ||
-      (item.description && item.description.toLowerCase().includes(q))
-    );
+    return item.name.toLowerCase().includes(q);
   });
 
   return (
     <AppLayout requiredRole="ADMIN">
       <div className="space-y-5">
         {/* Sticky Action & Filter Bar (stays visible while scrolling catalog) */}
-        <div className="sticky top-0 z-20 bg-brand-beige-light/95 backdrop-blur-md pt-1 pb-3 -mt-1 space-y-3 border-b border-brand-beige-dark/60">
+        <div className="sticky top-[57px] md:top-0 z-30 bg-[#FAF5EC]/98 backdrop-blur-md pt-2 pb-3 -mt-2 space-y-3 border-b border-brand-beige-dark/60 shadow-xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -180,7 +177,7 @@ export default function MenuItemsAdminPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search dishes by name or description..."
+                placeholder="Search by food name..."
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
               />
             </div>

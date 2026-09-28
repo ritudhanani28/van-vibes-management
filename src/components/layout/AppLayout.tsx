@@ -346,7 +346,7 @@ export function AppLayout({
       </aside>
 
       {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0">
         <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto">
           {children}
         </main>
