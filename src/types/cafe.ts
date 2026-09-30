@@ -1,15 +1,32 @@
 export type OrderStatus =
-  | 'ORDER_PLACED'
+  | 'PLACED'
   | 'ACCEPTED'
-  | 'PREPARING'
-  | 'READY'
   | 'SERVED'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'ORDER_PLACED'
+  | 'PREPARING'
+  | 'READY';
 
 export type PaymentStatus = 'PENDING' | 'PAID' | 'REFUNDED';
 
 export type TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED';
+
+export type SessionStatus = 'OPEN' | 'BILL_GENERATED' | 'CLOSED';
+
+export interface DiningSession {
+  id: string; // e.g. 'DS-1001'
+  tableId: string;
+  tableNumber: number;
+  status: SessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string | null;
+  orderCount?: number;
+  totalAmount?: number;
+  paymentStatus?: string;
+  tableStatus?: string;
+}
 
 export interface TableInfo {
   id: string; // e.g., 'T01'
@@ -19,6 +36,7 @@ export interface TableInfo {
   qrCodeUrl: string; // Full URL or relative path to scan
   capacity: number;
   status: TableStatus;
+  activeSession?: DiningSession;
 }
 
 export interface MenuItemOption {
@@ -56,17 +74,26 @@ export interface MenuCategory {
   page: number; // PDF page reference
 }
 
-export interface CartItem {
-  id: string; // Unique cart item ID (composite with options)
-  menuItemId: string;
+export interface OrderItem {
+  id: string;
+  menuItemId?: string;
   name: string;
-  category: string;
+  item_name?: string;
+  category?: string;
   price: number;
+  unitPrice?: number;
+  unit_price: number;
+  itemTotal?: number;
+  item_total?: number;
+  lineTotal?: number;
+  line_total?: number;
   quantity: number;
   selectedOptions?: { [key: string]: string };
   selectedAddOns?: string[];
   specialInstructions?: string;
 }
+
+export type CartItem = OrderItem;
 
 export interface CustomerDetails {
   name: string;
@@ -79,13 +106,16 @@ export interface Order {
   cafeId: string;
   tableId: string;
   tableNumber: number;
+  diningSessionId?: string;
   sessionToken: string;
   customerName: string;
   customerMobile: string;
   specialInstructions?: string;
-  items: CartItem[];
+  items: OrderItem[];
   subtotal: number;
   tax: number; // 5% GST
+  discountPercentage?: number;
+  discountAmount?: number;
   total: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
@@ -107,7 +137,12 @@ export interface CafeDetails {
 
 export interface BillData {
   billNumber: string;
-  orderId: string;
+  orderId?: string;
+  diningSessionId?: string;
+  orderIds?: string[];
+  billType?: string;
+  sessionStatus?: SessionStatus;
+  tableStatus?: TableStatus;
   cafe: CafeDetails;
   tableNumber: number;
   customerName: string;
@@ -124,7 +159,34 @@ export interface BillData {
   cgst: number;
   sgst: number;
   taxAmount: number;
+  discountPercentage?: number;
+  discountAmount?: number;
   total: number;
   paymentStatus: PaymentStatus;
   createdAt: string;
+}
+
+
+export interface InvoiceLedgerItem {
+  id: string;
+  orderId?: string | null;
+  diningSessionId?: string | null;
+  billType?: string;
+  invoiceNumber: string;
+  tableNumber?: number;
+  customerName?: string;
+  subtotal: number;
+  cgstRate: number;
+  cgstAmount: number;
+  sgstRate: number;
+  sgstAmount: number;
+  taxAmount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  settledAt?: string | null;
+  createdAt: string;
+  tableStatus?: string | null;
 }

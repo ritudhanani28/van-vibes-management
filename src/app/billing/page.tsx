@@ -3,51 +3,92 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BillModal } from '@/components/billing/BillModal';
-import { Order } from '@/types/cafe';
-import { CafeStore } from '@/lib/cafe-store';
+import { DiningSession } from '@/types/cafe';
+import { diningSessionsApi } from '@/api/diningSessions';
+import { billingApi, InvoiceRecord } from '@/api/billing';
+import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   Receipt,
-  DollarSign,
   FileText,
   Printer,
   CheckCircle2,
   Clock,
   Search,
-  TrendingUp,
+  RefreshCw,
+  Layers,
+  AlertCircle,
+  CreditCard,
+  Banknote,
+  UtensilsCrossed,
 } from 'lucide-react';
 
 export default function BillingPage() {
-
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [activeTab, setActiveTab] = useState<'SESSIONS' | 'PENDING' | 'LEDGER'>('SESSIONS');
+  const [sessions, setSessions] = useState<DiningSession[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<InvoiceRecord[]>([]);
+  const [ledgerInvoices, setLedgerInvoices] = useState<InvoiceRecord[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(() => {
-    const all = CafeStore.getAllOrders();
-    setOrders([...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [sessData, pendingData, ledgerData] = await Promise.all([
+        diningSessionsApi.getSessions(),
+        billingApi.getPendingPayments(),
+        billingApi.getLedger(),
+      ]);
+      setSessions(sessData);
+      setPendingInvoices(pendingData);
+      setLedgerInvoices(ledgerData);
+    } catch (err) {
+      console.error('Failed to load billing data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     loadData();
+
+    const unsubTable = wsManager.on('TABLE_STATUS_UPDATED', () => loadData());
+    const unsubPay = wsManager.on('PAYMENT_SETTLED', () => loadData());
+    const unsubOrder = wsManager.on('ORDER_PLACED', () => loadData());
+
+    const interval = setInterval(loadData, 8000);
+    return () => {
+      clearInterval(interval);
+      unsubTable();
+      unsubPay();
+      unsubOrder();
+    };
   }, [loadData]);
 
-  // Financial aggregates (only full summary for admin)
-  const totalGross = orders.reduce((sum, o) => sum + o.subtotal, 0);
-  const totalTax = orders.reduce((sum, o) => sum + o.tax, 0);
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
-  const completedRevenue = orders
-    .filter((o) => o.status === 'COMPLETED' || o.paymentStatus === 'PAID')
-    .reduce((sum, o) => sum + o.total, 0);
+  const handleSettle = async (invoice: InvoiceRecord, method: string) => {
+    try {
+      if (invoice.diningSessionId) {
+        await billingApi.settleSessionPayment(invoice.diningSessionId, method);
+      } else if (invoice.orderId) {
+        await billingApi.settlePayment(invoice.orderId, method);
+      }
+      await loadData();
+    } catch (err) {
+      console.error('Failed to settle payment:', err);
+    }
+  };
 
-  const filteredOrders = orders.filter((order) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return (
-      order.id.toLowerCase().includes(q) ||
-      (order.customerName && order.customerName.toLowerCase().includes(q)) ||
-      order.tableNumber.toString().includes(q)
-    );
-  });
+  // Metrics
+  const totalInvoices = ledgerInvoices.length;
+  const totalGross = ledgerInvoices.reduce((acc, curr) => acc + (curr.subtotal || 0), 0);
+  const totalTax = ledgerInvoices.reduce((acc, curr) => acc + (curr.taxAmount || 0), 0);
+  const settledRevenue = ledgerInvoices
+    .filter((inv) => inv.paymentStatus === 'PAID')
+    .reduce((acc, curr) => acc + (curr.total || 0), 0);
+
+  // Active open or bill-generated sessions
+  const activeSessions = sessions.filter((s) => s.status !== 'CLOSED');
 
   return (
     <AppLayout requiredRole="ADMIN">
@@ -56,153 +97,412 @@ export default function BillingPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
-              Billing & Revenue Ledger
+              Billing & Dining Sessions POS
             </h1>
             <p className="text-xs text-brand-green/70 mt-0.5">
-              Itemized receipts, GST breakdown, customer invoices, and POS records.
+              Consolidated dining session bills, table occupancy lifecycle, and digital tax invoices.
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={loadData}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-brand-beige border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all active:scale-95 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
         </div>
 
-        {/* Admin Financial Summary Metrics */}
-        
-          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
-              <span className="text-[10px] uppercase font-black text-brand-green/50 tracking-wider">
-                Total Orders
-              </span>
-              <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
-                {orders.length}
-              </p>
-              <p className="text-[11px] text-brand-green/60">Bills generated</p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
-              <span className="text-[10px] uppercase font-black text-brand-green/50 tracking-wider">
-                Gross Subtotal
-              </span>
-              <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
-                ₹{totalGross.toFixed(0)}
-              </p>
-              <p className="text-[11px] text-brand-green/60">Before taxes</p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
-              <span className="text-[10px] uppercase font-black text-brand-green/50 tracking-wider">
-                GST (5%)
-              </span>
-              <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
-                ₹{totalTax.toFixed(0)}
-              </p>
-              <p className="text-[11px] text-brand-green/60">Applicable tax</p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-brand-gold shadow-xs space-y-1 bg-gradient-to-br from-white to-brand-beige-light">
-              <span className="text-[10px] uppercase font-black text-brand-gold-dark tracking-wider">
-                Settled Revenue
-              </span>
-              <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
-                ₹{completedRevenue.toFixed(0)}
-              </p>
-              <p className="text-[11px] text-brand-green/60">Collected total</p>
-            </div>
+        {/* Financial Metrics Summary */}
+        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
+            <span className="text-[10px] uppercase font-black tracking-wider text-brand-green/60">
+              Active Dining Sessions
+            </span>
+            <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
+              {activeSessions.length}
+            </p>
+            <p className="text-[11px] text-brand-green/60">Tables currently dining or billing</p>
           </div>
 
-        {/* Invoices List Table */}
-        <div className="bg-white rounded-2xl border border-brand-beige-dark shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-brand-beige-dark/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h2 className="font-extrabold text-sm sm:text-base text-brand-green">
-              Invoice Ledger ({filteredOrders.length})
-            </h2>
-
-            <div className="w-full sm:w-64 relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-green/40" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search order #, customer..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[36px]"
-              />
-            </div>
+          <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
+            <span className="text-[10px] uppercase font-black tracking-wider text-amber-700">
+              Pending Unpaid Bills
+            </span>
+            <p className="text-2xl sm:text-3xl font-black text-amber-600 font-mono">
+              {pendingInvoices.length}
+            </p>
+            <p className="text-[11px] text-amber-800/60">Awaiting payment settlement</p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-brand-green">
-              <thead className="bg-brand-beige-light border-b border-brand-beige-dark/60 text-[10px] uppercase font-black tracking-wider text-brand-green/60">
-                <tr>
-                  <th className="px-4 py-3">Order ID</th>
-                  <th className="px-4 py-3">Table</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Placed At</th>
-                  <th className="px-4 py-3">Items</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-beige-dark/40">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-brand-beige-light/40 transition-colors">
-                    <td className="px-4 py-3 font-mono font-extrabold">{order.id}</td>
-                    <td className="px-4 py-3">
-                      <span className="font-bold px-2 py-0.5 rounded bg-brand-green text-brand-beige font-mono text-[10px]">
-                        T-{order.tableNumber.toString().padStart(2, '0')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {order.customerName || 'Dine-in Guest'}
-                    </td>
-                    <td className="px-4 py-3 text-[11px] text-brand-green/70">
-                      {new Date(order.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-4 py-3 text-brand-green/70">
-                      {order.items.reduce((s, i) => s + i.quantity, 0)} items
-                    </td>
-                    <td className="px-4 py-3 font-mono font-black text-right">
-                      ₹{order.total.toFixed(0)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                          order.status === 'COMPLETED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : order.status === 'CANCELLED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-amber-100 text-amber-900'
-                        }`}
-                      >
-                        {order.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrderId(order.id)}
-                        className="px-2.5 py-1 rounded-lg bg-brand-beige hover:bg-brand-green hover:text-brand-beige text-brand-green font-bold text-[11px] border border-brand-beige-dark transition-all inline-flex items-center gap-1 shadow-2xs"
-                      >
-                        <FileText className="w-3 h-3" />
-                        <span>View Bill</span>
-                      </button>
-                    </td>
+          <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
+            <span className="text-[10px] uppercase font-black tracking-wider text-brand-green/60">
+              Total 5% GST Collected
+            </span>
+            <p className="text-2xl sm:text-3xl font-black text-brand-green font-mono">
+              ₹{totalTax.toFixed(0)}
+            </p>
+            <p className="text-[11px] text-brand-green/60">CGST 2.5% + SGST 2.5%</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-beige-dark shadow-xs space-y-1">
+            <span className="text-[10px] uppercase font-black tracking-wider text-brand-gold-dark">
+              Settled Revenue
+            </span>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-700 font-mono">
+              ₹{settledRevenue.toFixed(0)}
+            </p>
+            <p className="text-[11px] text-emerald-900/60">Total paid receipts</p>
+          </div>
+        </div>
+
+        {/* View Selection Tabs */}
+        <div className="flex border-b border-brand-beige-dark bg-white rounded-2xl p-1.5 shadow-2xs gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('SESSIONS')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'SESSIONS'
+                ? 'bg-brand-green text-brand-beige shadow-xs'
+                : 'text-brand-green/70 hover:bg-brand-beige-light'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Active Dining Sessions ({activeSessions.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('PENDING')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'PENDING'
+                ? 'bg-brand-green text-brand-beige shadow-xs'
+                : 'text-brand-green/70 hover:bg-brand-beige-light'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Pending Payments ({pendingInvoices.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('LEDGER')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'LEDGER'
+                ? 'bg-brand-green text-brand-beige shadow-xs'
+                : 'text-brand-green/70 hover:bg-brand-beige-light'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>Settled Ledger ({totalInvoices})</span>
+          </button>
+        </div>
+
+        {/* TAB 1: ACTIVE DINING SESSIONS */}
+        {activeTab === 'SESSIONS' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeSessions.length === 0 ? (
+                <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-brand-beige-dark p-6">
+                  <UtensilsCrossed className="w-10 h-10 text-brand-green/30 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-brand-green">No active dining sessions</p>
+                  <p className="text-xs text-brand-green/60 mt-1">
+                    When customers scan table QR codes and place orders, active sessions appear here.
+                  </p>
+                </div>
+              ) : (
+                activeSessions.map((sess) => {
+                  const isBillGen = sess.status === 'BILL_GENERATED';
+                  return (
+                    <div
+                      key={sess.id}
+                      className="bg-white rounded-2xl border border-brand-beige-dark p-5 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md transition-all"
+                    >
+                      <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark/50">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-9 h-9 rounded-full bg-brand-green text-brand-beige font-black text-sm flex items-center justify-center font-mono">
+                              {sess.tableNumber.toString().padStart(2, '0')}
+                            </span>
+                            <div>
+                              <h3 className="font-extrabold text-sm text-brand-green">
+                                Table {sess.tableNumber.toString().padStart(2, '0')}
+                              </h3>
+                              <p className="text-[10px] text-brand-green/60 font-mono">
+                                Session {sess.id}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={`text-[10px] uppercase font-black px-2 py-0.5 rounded border ${
+                                isBillGen
+                                  ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              }`}
+                            >
+                              {sess.status.replace('_', ' ')}
+                            </span>
+                            <span
+                              className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
+                                sess.tableStatus === 'AVAILABLE'
+                                  ? 'bg-emerald-100 text-emerald-900'
+                                  : 'bg-amber-100 text-amber-900'
+                              }`}
+                            >
+                              Table {sess.tableStatus || 'AVAILABLE'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1.5 text-xs text-brand-green">
+                          <div className="flex justify-between">
+                            <span className="text-brand-green/70">Orders placed:</span>
+                            <span className="font-bold font-mono">{sess.orderCount || 0} orders</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-brand-green/70">Session Total:</span>
+                            <span className="font-bold font-mono text-base text-brand-green-deep">
+                              ₹{(sess.totalAmount || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[11px] text-brand-green/60">
+                            <span>Started:</span>
+                            <span>{new Date(sess.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action */}
+                      <div className="pt-3 border-t border-brand-beige-dark/50 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSessionId(sess.id)}
+                          className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>{isBillGen ? 'View / Print Final Bill' : 'Generate Final Bill'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: PENDING UNPAID PAYMENTS */}
+        {activeTab === 'PENDING' && (
+          <div className="bg-white rounded-3xl border border-brand-beige-dark shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-brand-beige-dark bg-brand-beige-light/40 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-brand-green">Unpaid Invoices Awaiting Settlement</h3>
+                <p className="text-[11px] text-brand-green/70">
+                  Note: A physical table may already be AVAILABLE or occupied by a new guest while an older bill is pending payment.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-brand-beige-dark bg-brand-beige-light text-[10px] uppercase tracking-wider font-extrabold text-brand-green/70">
+                    <th className="py-3 px-4">Invoice / Bill ID</th>
+                    <th className="py-3 px-4">Table</th>
+                    <th className="py-3 px-4">Dining Session</th>
+                    <th className="py-3 px-4">Guest</th>
+                    <th className="py-3 px-4">Total Due</th>
+                    <th className="py-3 px-4">Table Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-brand-beige-dark/50 text-xs text-brand-green font-medium">
+                  {pendingInvoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-brand-green/50">
+                        No pending unpaid bills! All dining receipts settled.
+                      </td>
+                    </tr>
+                  ) : (
+                    pendingInvoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-brand-beige-light/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold">{inv.invoiceNumber}</td>
+                        <td className="py-3.5 px-4 font-bold">
+                          Table {inv.tableNumber ? inv.tableNumber.toString().padStart(2, '0') : '--'}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-brand-green/70">
+                          {inv.diningSessionId || '--'}
+                        </td>
+                        <td className="py-3.5 px-4">{inv.customerName || 'Dining Guest'}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-brand-green-deep">
+                          ₹{inv.total.toFixed(2)}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              inv.tableStatus === 'AVAILABLE'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}
+                          >
+                            {inv.tableStatus || 'AVAILABLE'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSettle(inv, 'UPI')}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-colors cursor-pointer"
+                            >
+                              Settle UPI
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSettle(inv, 'CASH')}
+                              className="px-2.5 py-1 rounded-lg bg-brand-green hover:bg-brand-green-hover text-brand-beige text-[11px] font-bold transition-colors cursor-pointer"
+                            >
+                              Settle Cash
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (inv.diningSessionId) setSelectedSessionId(inv.diningSessionId);
+                                else if (inv.orderId) setSelectedOrderId(inv.orderId);
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-beige hover:bg-brand-beige-dark text-brand-green text-[11px] font-bold transition-colors border border-brand-beige-dark cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-brand-gold" />
+                              <span>View Receipt</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* TAB 3: SETTLED LEDGER */}
+        {activeTab === 'LEDGER' && (
+          <div className="bg-white rounded-3xl border border-brand-beige-dark shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-brand-beige-dark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-4 h-4 text-brand-green/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search invoice number, table, session..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-brand-beige-light border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-brand-beige-dark bg-brand-beige-light text-[10px] uppercase tracking-wider font-extrabold text-brand-green/70">
+                    <th className="py-3 px-4">Invoice ID</th>
+                    <th className="py-3 px-4">Table</th>
+                    <th className="py-3 px-4">Session</th>
+                    <th className="py-3 px-4">Guest</th>
+                    <th className="py-3 px-4">Subtotal</th>
+                    <th className="py-3 px-4">GST (5%)</th>
+                    <th className="py-3 px-4">Discount</th>
+                    <th className="py-3 px-4">Total</th>
+                    <th className="py-3 px-4">Payment</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-beige-dark/50 text-xs text-brand-green font-medium">
+                  {ledgerInvoices
+                    .filter((inv) => {
+                      if (!searchQuery.trim()) return true;
+                      const q = searchQuery.toLowerCase().trim();
+                      return (
+                        inv.invoiceNumber.toLowerCase().includes(q) ||
+                        (inv.diningSessionId && inv.diningSessionId.toLowerCase().includes(q)) ||
+                        (inv.customerName && inv.customerName.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((inv) => {
+                      const isPaid = inv.paymentStatus === 'PAID';
+                      return (
+                        <tr key={inv.id} className="hover:bg-brand-beige-light/40 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-bold">{inv.invoiceNumber}</td>
+                          <td className="py-3.5 px-4">
+                            Table {inv.tableNumber ? inv.tableNumber.toString().padStart(2, '0') : '--'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-brand-green/70">
+                            {inv.diningSessionId || '--'}
+                          </td>
+                          <td className="py-3.5 px-4 font-bold">{inv.customerName || 'Dining Guest'}</td>
+                          <td className="py-3.5 px-4 font-mono">₹{inv.subtotal.toFixed(2)}</td>
+                          <td className="py-3.5 px-4 font-mono text-brand-green/70">₹{inv.taxAmount.toFixed(2)}</td>
+                          <td className="py-3.5 px-4 font-mono text-brand-green font-bold">
+                            {inv.discountAmount && inv.discountAmount > 0
+                              ? `-₹${inv.discountAmount.toFixed(2)} (${inv.discountPercentage}%)`
+                              : '--'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-brand-green-deep">
+                            ₹{inv.total.toFixed(2)}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                                isPaid
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                              <span>{inv.paymentStatus}</span>
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (inv.diningSessionId) setSelectedSessionId(inv.diningSessionId);
+                                else if (inv.orderId) setSelectedOrderId(inv.orderId);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-beige hover:bg-brand-beige-dark text-brand-green text-[11px] font-bold transition-colors border border-brand-beige-dark cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-brand-gold" />
+                              <span>Receipt</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Bill Receipt Modal */}
-      {selectedOrderId && (
-        <BillModal
-          orderId={selectedOrderId}
-          onClose={() => setSelectedOrderId(null)}
-        />
-      )}
+      {/* Bill Receipt & Settlement Modal */}
+      <BillModal
+        orderId={selectedOrderId}
+        sessionId={selectedSessionId}
+        onClose={() => {
+          setSelectedOrderId(null);
+          setSelectedSessionId(null);
+        }}
+        onSettled={() => {
+          loadData();
+        }}
+      />
     </AppLayout>
   );
 }

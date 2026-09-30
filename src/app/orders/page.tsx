@@ -5,27 +5,28 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { BillModal } from '@/components/billing/BillModal';
 import { Order, OrderStatus } from '@/types/cafe';
-import { CafeStore } from '@/lib/cafe-store';
+import { ordersApi } from '@/api/orders';
+import { wsManager } from '@/services/websocket/WebSocketManager';
 import { useAuth } from '@/context/AuthContext';
-import { Search, Filter, RefreshCw, ShoppingBag } from 'lucide-react';
+import { Search, RefreshCw, ShoppingBag } from 'lucide-react';
 
 export default function OrdersPage() {
   const { role } = useAuth();
   const isChef = role === 'CHEF';
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL');
-  const [tableFilter, setTableFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
+  const [selectedBillSessionId, setSelectedBillSessionId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadOrders = useCallback(() => {
+  const loadOrders = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const all = CafeStore.getAllOrders();
-      setOrders([...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    } catch {
-      // ignore
+      const all = await ordersApi.getOrders();
+      setOrders(all);
+    } catch (err) {
+      console.error('Failed to load orders:', err);
     } finally {
       setIsRefreshing(false);
     }
@@ -33,18 +34,69 @@ export default function OrdersPage() {
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(loadOrders, 6000);
-    return () => clearInterval(interval);
+
+    // Listen for real-time order creation
+    const handleNewOrder = (newOrder: Order) => {
+      setOrders((prev) => {
+        if (prev.some((o) => o.id === newOrder.id)) return prev;
+        return [newOrder, ...prev];
+      });
+    };
+    const unsubPlaced = wsManager.on('ORDER_PLACED', handleNewOrder);
+    const unsubCreated = wsManager.on('ORDER_CREATED', handleNewOrder);
+
+    // Listen for specific status transitions
+    const handleStatusTransition = (data: { orderId?: string; order_id?: string; status: OrderStatus; updatedAt?: string; updated_at?: string }) => {
+      const id = data.orderId || data.order_id;
+      const st = data.status;
+      const upd = data.updatedAt || data.updated_at || new Date().toISOString();
+      if (!id) return;
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: st, updatedAt: upd } : o))
+      );
+    };
+
+    const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleStatusTransition);
+    const unsubServed = wsManager.on('ORDER_SERVED', handleStatusTransition);
+    const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleStatusTransition);
+    const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
+
+    const interval = setInterval(loadOrders, 10000);
+    return () => {
+      clearInterval(interval);
+      unsubPlaced();
+      unsubCreated();
+      unsubAccepted();
+      unsubServed();
+      unsubCompleted();
+      unsubUpdated();
+    };
   }, [loadOrders]);
 
   const handleUpdateStatus = async (orderId: string, nextStatus: OrderStatus) => {
-    CafeStore.updateOrderStatus(orderId, nextStatus);
+    try {
+      if (nextStatus === 'ACCEPTED') {
+        await ordersApi.acceptOrder(orderId);
+      } else if (nextStatus === 'COMPLETED') {
+        await ordersApi.completeOrder(orderId);
+      } else {
+        await ordersApi.updateStatus(orderId, nextStatus);
+      }
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+      throw err;
+    }
     loadOrders();
   };
 
   const filteredOrders = orders.filter((order) => {
-    if (statusFilter !== 'ALL' && order.status !== statusFilter) return false;
-    if (tableFilter !== 'ALL' && order.tableNumber.toString() !== tableFilter) return false;
+    if (statusFilter !== 'ALL') {
+      if (statusFilter === 'PLACED') {
+        if (order.status !== 'PLACED' && order.status !== 'ORDER_PLACED') return false;
+      } else if (order.status !== statusFilter) {
+        return false;
+      }
+    }
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase().trim();
@@ -52,7 +104,7 @@ export default function OrdersPage() {
       order.id.toLowerCase().includes(q) ||
       (order.customerName && order.customerName.toLowerCase().includes(q)) ||
       (order.customerMobile && order.customerMobile.includes(q)) ||
-      order.items.some((i) => i.name.toLowerCase().includes(q))
+      (order.items && order.items.some((i) => i.name.toLowerCase().includes(q)))
     );
   });
 
@@ -62,110 +114,133 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
-              Orders Management & History
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
+                {isChef ? 'Kitchen Orders Queue' : 'Orders Management'}
+              </h1>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-brand-green text-brand-beige">
+                {orders.length} tickets
+              </span>
+            </div>
             <p className="text-xs text-brand-green/70 mt-0.5">
-              {isChef ? 'Filter kitchen orders by table, preparation stage, and search keywords.' : 'Filter orders by table, stage progression, customer details, and invoice receipts.'}
+              {isChef
+                ? 'Operational live tickets for food preparation (Pricing strictly excluded)'
+                : 'Monitor, manage dish status, and generate bills'}
             </p>
           </div>
 
           <button
+            type="button"
             onClick={loadOrders}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-brand-beige border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-brand-beige border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>
 
-        {/* Filter Controls Bar */}
-        <div className="bg-white rounded-2xl border border-brand-beige-dark p-4 shadow-xs space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-green/40" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by order ID, name, dish..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
-              />
-            </div>
+        {/* Filter Toolbar */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {(
+              [
+                { label: 'All', value: 'ALL' },
+                { label: 'Placed', value: 'PLACED' },
+                { label: 'Accepted', value: 'ACCEPTED' },
+                { label: 'Completed', value: 'COMPLETED' },
+                { label: 'Cancelled', value: 'CANCELLED' },
+              ] as const
+            ).map((tab) => {
+              const count =
+                tab.value === 'ALL'
+                  ? orders.length
+                  : tab.value === 'PLACED'
+                  ? orders.filter((o) => o.status === 'PLACED' || o.status === 'ORDER_PLACED').length
+                  : orders.filter((o) => o.status === tab.value).length;
+              const isActive = statusFilter === tab.value;
 
-            {/* Table Dropdown */}
-            <div>
-              <select
-                value={tableFilter}
-                onChange={(e) => setTableFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
-              >
-                <option value="ALL">All Tables (01–12)</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
-                  <option key={num} value={num.toString()}>
-                    Table {num.toString().padStart(2, '0')}
-                  </option>
-                ))}
-              </select>
-            </div>
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'bg-brand-green text-brand-beige shadow-xs'
+                      : 'bg-white text-brand-green/70 hover:bg-brand-beige border border-brand-beige-dark'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      isActive ? 'bg-brand-beige text-brand-green' : 'bg-brand-beige-light text-brand-green/70'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-            {/* Status Dropdown */}
-            <div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:outline-none focus:ring-2 focus:ring-brand-green min-h-[40px]"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="ORDER_PLACED">Order Placed</option>
-                <option value="ACCEPTED">Accepted</option>
-                <option value="PREPARING">Preparing</option>
-                <option value="READY">Ready</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
+          {/* Search Box */}
+          <div className="relative min-w-[240px]">
+            <Search className="w-4 h-4 text-brand-green/40 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search order ID, guest, mobile..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+            />
           </div>
         </div>
 
         {/* Orders Grid */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-brand-green/70 px-1">
-            <span>Showing {filteredOrders.length} orders</span>
+        {filteredOrders.length === 0 ? (
+          <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3">
+            <ShoppingBag className="w-10 h-10 text-brand-green/30 mx-auto" />
+            <h3 className="font-extrabold text-brand-green text-base">No orders found</h3>
+            <p className="text-xs text-brand-green/60">
+              There are no orders matching your current filter criteria.
+            </p>
           </div>
-
-          {filteredOrders.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-2xl border border-brand-beige-dark space-y-2">
-              <ShoppingBag className="w-10 h-10 text-brand-green/30 mx-auto" />
-              <p className="font-bold text-sm text-brand-green">No orders found</p>
-              <p className="text-xs text-brand-green/60">
-                Try resetting your filters or search keywords.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {filteredOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onUpdateStatus={handleUpdateStatus}
-                  onOpenBill={isChef ? undefined : (id) => setSelectedBillOrderId(id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onUpdateStatus={handleUpdateStatus}
+                onOpenBill={(id) => {
+                  const ord = orders.find((o) => o.id === id);
+                  if (ord?.diningSessionId) {
+                    setSelectedBillSessionId(ord.diningSessionId);
+                    setSelectedBillOrderId(null);
+                  } else {
+                    setSelectedBillOrderId(id);
+                    setSelectedBillSessionId(null);
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Bill Receipt Modal */}
-      {!isChef && selectedBillOrderId && (
-        <BillModal
-          orderId={selectedBillOrderId}
-          onClose={() => setSelectedBillOrderId(null)}
-        />
-      )}
+      <BillModal
+        orderId={selectedBillOrderId}
+        sessionId={selectedBillSessionId}
+        onClose={() => {
+          setSelectedBillOrderId(null);
+          setSelectedBillSessionId(null);
+        }}
+        onSettled={() => {
+          loadOrders();
+        }}
+      />
     </AppLayout>
   );
 }
