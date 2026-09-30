@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Tag,
   Sparkles,
+  Coins,
 } from 'lucide-react';
 
 interface Props {
@@ -20,16 +21,24 @@ interface Props {
   onSettled?: () => void;
 }
 
+const roundTo2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
 export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const [bill, setBill] = useState<BillData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Bill-level Discount State
+  // Independent Bill-level Discount State
   const [applyDiscountChecked, setApplyDiscountChecked] = useState(false);
   const [discountInput, setDiscountInput] = useState('');
-  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState<string | null>(null);
+
+  // Independent Bill-level Extra Charge State
+  const [applyExtraChargeChecked, setApplyExtraChargeChecked] = useState(false);
+  const [extraChargeInput, setExtraChargeInput] = useState('');
+  const [appliedExtraCharge, setAppliedExtraCharge] = useState<number>(0);
+  const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
 
   const [isGeneratingFinalBill, setIsGeneratingFinalBill] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -49,17 +58,17 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
         return;
       }
       setBill(data);
-      if (data.discountPercentage && data.discountPercentage > 0) {
-        setApplyDiscountChecked(true);
-        setDiscountInput(data.discountPercentage.toString());
-      } else if (data.discountAmount && data.discountAmount > 0 && data.subtotal > 0) {
-        setApplyDiscountChecked(true);
-        const pct = Math.round((data.discountAmount / data.subtotal) * 100);
-        setDiscountInput(pct.toString());
-      } else {
-        setApplyDiscountChecked(false);
-        setDiscountInput('');
-      }
+
+      const initialDisc = data.discountPercentage || (data.discountAmount && data.subtotal > 0 ? Math.round((data.discountAmount / data.subtotal) * 100) : 0);
+      const initialExtra = data.extraCharge || 0;
+
+      setAppliedDiscount(initialDisc);
+      setDiscountInput(initialDisc > 0 ? initialDisc.toString() : '');
+      setApplyDiscountChecked(false);
+
+      setAppliedExtraCharge(initialExtra);
+      setExtraChargeInput(initialExtra > 0 ? initialExtra.toString() : '');
+      setApplyExtraChargeChecked(false);
     } catch (err: any) {
       setError(err.message || 'Error loading invoice receipt');
     } finally {
@@ -71,39 +80,35 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     fetchBill();
   }, [fetchBill]);
 
-  const handleApplyDiscount = async (percentage: number) => {
-    if ((!orderId && !sessionId) || !bill) return;
+  // Apply Discount: updates discount only, unchecks & closes only discount box, keeps buttons visible
+  const handleApplyDiscount = (percentage: number) => {
+    if (!bill) return;
 
     if (percentage < 0 || percentage > 100) {
       setDiscountError('Discount percentage must be between 0 and 100%.');
       return;
     }
 
-    setIsApplyingDiscount(true);
     setDiscountError(null);
+    setAppliedDiscount(percentage);
+    setDiscountInput(percentage > 0 ? percentage.toString() : '');
+    // Automatically remove tick from discount checkbox to close ONLY this box
+    setApplyDiscountChecked(false);
 
-    try {
-      let updatedBill: BillData;
-      const targetSessionId = sessionId || bill.diningSessionId;
-      if (targetSessionId) {
-        updatedBill = await billingApi.generateSessionBill(targetSessionId, percentage);
-      } else {
-        updatedBill = await billingApi.generateBill(orderId!, percentage);
-      }
-      setBill(updatedBill);
-      if (percentage > 0) {
-        setDiscountInput(percentage.toString());
-        setApplyDiscountChecked(true);
-      } else {
-        setDiscountInput('');
-        setApplyDiscountChecked(false);
-      }
-      onSettled?.();
-    } catch (err: any) {
-      setDiscountError(err.message || 'Failed to apply discount.');
-    } finally {
-      setIsApplyingDiscount(false);
-    }
+    // Update bill totals preview
+    setBill((prev) => {
+      if (!prev) return prev;
+      const subtotal = prev.subtotal || 0;
+      const discAmt = roundTo2(subtotal * (percentage / 100));
+      const extra = appliedExtraCharge;
+      const total = roundTo2(Math.max(0, subtotal - discAmt + extra));
+      return {
+        ...prev,
+        discountPercentage: percentage,
+        discountAmount: discAmt,
+        total,
+      };
+    });
   };
 
   const handleApplyClick = () => {
@@ -115,18 +120,59 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     handleApplyDiscount(parsed);
   };
 
+  // Apply Extra Charge: updates extra charge only, unchecks & closes only extra charge box, keeps buttons visible
+  const handleApplyExtraCharge = (amount: number) => {
+    if (!bill) return;
+
+    if (amount < 0) {
+      setExtraChargeError('Extra charge amount cannot be negative.');
+      return;
+    }
+
+    setExtraChargeError(null);
+    setAppliedExtraCharge(amount);
+    setExtraChargeInput(amount > 0 ? amount.toString() : '');
+    // Automatically remove tick from extra charge checkbox to close ONLY this box
+    setApplyExtraChargeChecked(false);
+
+    // Update bill totals preview
+    setBill((prev) => {
+      if (!prev) return prev;
+      const subtotal = prev.subtotal || 0;
+      const discAmt = roundTo2(subtotal * ((appliedDiscount || 0) / 100));
+      const total = roundTo2(Math.max(0, subtotal - discAmt + amount));
+      return {
+        ...prev,
+        extraCharge: amount,
+        total,
+      };
+    });
+  };
+
+  const handleApplyExtraChargeClick = () => {
+    const parsed = parseFloat(extraChargeInput.trim());
+    if (isNaN(parsed) || parsed < 0) {
+      setExtraChargeError('Please enter a valid extra charge amount in Rupees (₹).');
+      return;
+    }
+    handleApplyExtraCharge(parsed);
+  };
+
+  // Generate Final Bill: Official transition. AFTER this, discount and extra charge are hidden.
   const handleGenerateFinalBill = async () => {
     if (!bill) return;
     setIsGeneratingFinalBill(true);
     setError(null);
     try {
-      const parsedDiscount = applyDiscountChecked ? parseFloat(discountInput.trim()) || 0 : 0;
+      const finalDiscount = appliedDiscount;
+      const finalExtraCharge = appliedExtraCharge;
+
       let updatedBill: BillData;
       const targetSessionId = sessionId || bill.diningSessionId;
       if (targetSessionId) {
-        updatedBill = await billingApi.generateSessionBill(targetSessionId, parsedDiscount);
+        updatedBill = await billingApi.generateSessionBill(targetSessionId, finalDiscount, finalExtraCharge);
       } else if (orderId) {
-        updatedBill = await billingApi.generateBill(orderId, parsedDiscount);
+        updatedBill = await billingApi.generateBill(orderId, finalDiscount, finalExtraCharge);
       } else {
         return;
       }
@@ -166,9 +212,16 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
 
   if (!orderId && !sessionId) return null;
 
-  const isSessionOpen = bill?.sessionStatus === 'OPEN';
-  const isBillGenerated = bill?.sessionStatus === 'BILL_GENERATED';
-  const isPaid = bill?.paymentStatus === 'PAID';
+  const isPaid = bill?.paymentStatus === 'PAID' || bill?.sessionStatus === 'CLOSED';
+  const isBillGenerated = !isPaid && (bill?.sessionStatus === 'BILL_GENERATED' || (!bill?.sessionStatus && Boolean(bill?.billNumber?.startsWith('INV-'))));
+  const isSessionOpen = !isPaid && !isBillGenerated;
+  
+  // Options (Discount and Extra Charge) are ONLY visible before bill generation. After generating bill, they are hidden.
+  const canEditCharges = isSessionOpen;
+
+  const hasDiscount = Boolean((bill?.discountAmount && bill.discountAmount > 0) || appliedDiscount > 0);
+  const hasExtraCharge = Boolean((bill?.extraCharge && bill.extraCharge > 0) || appliedExtraCharge > 0);
+  const showSubtotalAndBreakdown = hasDiscount || hasExtraCharge;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green-deep/70 backdrop-blur-xs animate-in fade-in duration-200">
@@ -287,7 +340,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <span className="tracking-tight font-serif">CAFE</span>
                 </div>
                 <p className="text-xs text-brand-green/70">A Quiet Corner for Real Conversations</p>
-                              </div>
+              </div>
 
               {/* Invoice & Order Metadata */}
               <div className="grid grid-cols-2 gap-2 text-xs py-2 border-b border-brand-beige-dark/60 text-brand-green">
@@ -309,16 +362,14 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   </span>
                   <span className="font-extrabold">
                     Table {bill.tableNumber.toString().padStart(2, '0')}
-                    {bill.diningSessionId ? ` (${bill.diningSessionId})` : ''}
+                    {bill.diningSessionId ? ` (Session #${bill.diningSessionId.replace('DS-', '')})` : ''}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-brand-green/60 block text-[10px] uppercase font-bold tracking-wider">
-                    Customer
+                    Guest Name
                   </span>
-                  <span className="font-semibold truncate max-w-[150px] inline-block">
-                    {bill.customerName} {bill.customerMobile && bill.customerMobile !== '--' ? `(${bill.customerMobile})` : ''}
-                  </span>
+                  <span className="font-medium">{bill.customerName || 'Dining Guests'}</span>
                 </div>
                 {bill.orderIds && bill.orderIds.length > 1 && (
                   <div className="col-span-2 pt-1 text-[10px] text-brand-green/70 font-mono">
@@ -355,91 +406,205 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 </div>
               </div>
 
-              {/* Admin Bill Discount Section (NO-PRINT: only controls are hidden during printing) */}
-              {!isPaid && (
-                <div className="no-print p-3.5 rounded-xl bg-brand-beige-light border border-brand-beige-dark/80 space-y-2.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-brand-green select-none">
-                    <input
-                      type="checkbox"
-                      checked={applyDiscountChecked}
-                      onChange={(e) => {
-                        const isChecked = e.target.checked;
-                        setApplyDiscountChecked(isChecked);
-                        setDiscountError(null);
-                        if (!isChecked && bill.discountAmount && bill.discountAmount > 0) {
-                          handleApplyDiscount(0);
-                        }
-                      }}
-                      className="w-4 h-4 rounded text-brand-green focus:ring-brand-gold accent-brand-green cursor-pointer"
-                    />
-                    <span className="flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5 text-brand-gold" />
-                      <span>Apply Discount</span>
-                    </span>
-                  </label>
+              {/* Admin Bill Controls: Discount & Extra Charge (NO-PRINT) - Only visible BEFORE bill is generated */}
+              {canEditCharges && (
+                <div className="no-print space-y-3">
+                  {/* Apply Discount Box */}
+                  <div className="p-3.5 rounded-xl bg-brand-beige-light border border-brand-beige-dark/80 space-y-2.5">
+                    <label className="flex items-center justify-between cursor-pointer text-xs font-black text-brand-green select-none">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={applyDiscountChecked}
+                          onChange={(e) => {
+                            setApplyDiscountChecked(e.target.checked);
+                            setDiscountError(null);
+                          }}
+                          className="w-4 h-4 rounded text-brand-green focus:ring-brand-gold accent-brand-green cursor-pointer"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Apply Discount</span>
+                        </span>
+                      </div>
+                      {appliedDiscount > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {appliedDiscount}% Applied
+                        </span>
+                      )}
+                    </label>
 
-                  {applyDiscountChecked && (
-                    <div className="pt-2 border-t border-brand-beige-dark/60 space-y-2 animate-in fade-in duration-150">
-                      <div>
-                        <label className="text-[11px] font-bold text-brand-green/70 block mb-1">
-                          Discount (%)
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            max="100"
-                            placeholder="10"
-                            value={discountInput}
-                            onChange={(e) => {
-                              setDiscountInput(e.target.value);
-                              setDiscountError(null);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleApplyClick();
-                            }}
-                            className="w-full pl-3 pr-8 py-1.5 text-xs font-mono font-bold bg-white border border-brand-beige-dark rounded-lg text-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-green/60">
-                            %
-                          </span>
+                    {applyDiscountChecked && (
+                      <div className="pt-2 border-t border-brand-beige-dark/60 space-y-2 animate-in fade-in duration-150">
+                        <div>
+                          <label className="text-[11px] font-bold text-brand-green/70 block mb-1">
+                            Discount (%)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              max="100"
+                              placeholder="10"
+                              value={discountInput}
+                              onChange={(e) => {
+                                setDiscountInput(e.target.value);
+                                setDiscountError(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleApplyClick();
+                              }}
+                              className="w-full pl-3 pr-8 py-1.5 text-xs font-mono font-bold bg-white border border-brand-beige-dark rounded-lg text-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-green/60">
+                              %
+                            </span>
+                          </div>
+                        </div>
+
+                        {discountError && (
+                          <p className="text-[11px] font-bold text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{discountError}</span>
+                          </p>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          {appliedDiscount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleApplyDiscount(0)}
+                              className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                            >
+                              Remove Discount
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={handleApplyClick}
+                            className="px-4 py-1.5 rounded-lg bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-black shadow-2xs transition-all active:scale-95 cursor-pointer"
+                          >
+                            Apply Discount
+                          </button>
                         </div>
                       </div>
+                    )}
+                  </div>
 
-                      {discountError && (
-                        <p className="text-[11px] font-bold text-red-600 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span>{discountError}</span>
-                        </p>
-                      )}
-
-                      <div className="flex justify-end gap-2 pt-1">
-                        <button
-                          type="button"
-                          disabled={isApplyingDiscount}
-                          onClick={handleApplyClick}
-                          className="px-4 py-1.5 rounded-lg bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-black shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                        >
-                          {isApplyingDiscount ? 'Applying...' : 'Apply Discount'}
-                        </button>
+                  {/* Apply Extra Charge Box */}
+                  <div className="p-3.5 rounded-xl bg-brand-beige-light border border-brand-beige-dark/80 space-y-2.5">
+                    <label className="flex items-center justify-between cursor-pointer text-xs font-black text-brand-green select-none">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={applyExtraChargeChecked}
+                          onChange={(e) => {
+                            setApplyExtraChargeChecked(e.target.checked);
+                            setExtraChargeError(null);
+                          }}
+                          className="w-4 h-4 rounded text-brand-green focus:ring-brand-gold accent-brand-green cursor-pointer"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <Coins className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Extra Charge</span>
+                        </span>
                       </div>
-                    </div>
-                  )}
+                      {appliedExtraCharge > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-mono">
+                          +₹{appliedExtraCharge.toFixed(2)} Applied
+                        </span>
+                      )}
+                    </label>
+
+                    {applyExtraChargeChecked && (
+                      <div className="pt-2 border-t border-brand-beige-dark/60 space-y-2 animate-in fade-in duration-150">
+                        <div>
+                          <label className="text-[11px] font-bold text-brand-green/70 block mb-1">
+                            Extra Charge Amount (₹)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              placeholder="50"
+                              value={extraChargeInput}
+                              onChange={(e) => {
+                                setExtraChargeInput(e.target.value);
+                                setExtraChargeError(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleApplyExtraChargeClick();
+                              }}
+                              className="w-full pl-7 pr-3 py-1.5 text-xs font-mono font-bold bg-white border border-brand-beige-dark rounded-lg text-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+                            />
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-green/60">
+                              ₹
+                            </span>
+                          </div>
+                        </div>
+
+                        {extraChargeError && (
+                          <p className="text-[11px] font-bold text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{extraChargeError}</span>
+                          </p>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          {appliedExtraCharge > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleApplyExtraCharge(0)}
+                              className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                            >
+                              Remove Extra Charge
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={handleApplyExtraChargeClick}
+                            className="px-4 py-1.5 rounded-lg bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-black shadow-2xs transition-all active:scale-95 cursor-pointer"
+                          >
+                            Apply Extra Charge
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* Bill Totals (No GST or Subtotal) */}
+              {/* Bill Totals */}
               <div className="pt-3 border-t-2 border-brand-green space-y-1.5 text-xs">
-                {/* Bill-level discount line appears dynamically only when discount applied */}
-                {bill.discountAmount && bill.discountAmount > 0 ? (
-                  <div className="flex justify-between text-brand-green font-bold pb-2 border-b border-brand-beige-dark">
+                {/* When discount or extra charge is present, display subtotal and breakdown */}
+                {showSubtotalAndBreakdown && (
+                  <div className="flex justify-between text-brand-green font-bold pb-1">
+                    <span>Subtotal</span>
+                    <span className="font-mono">₹{bill.subtotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {/* Bill-level discount line */}
+                {hasDiscount && bill.discountAmount ? (
+                  <div className="flex justify-between text-brand-green font-bold pb-1">
                     <span>Discount ({bill.discountPercentage || Math.round((bill.discountAmount / (bill.subtotal || 1)) * 100)}%)</span>
-                    <span className="font-mono font-bold">-₹{bill.discountAmount.toFixed(2)}</span>
+                    <span className="font-mono font-bold text-emerald-700">-₹{bill.discountAmount.toFixed(2)}</span>
                   </div>
                 ) : null}
 
-                <div className="flex justify-between text-base font-black text-brand-green">
+                {/* Extra Charge line */}
+                {hasExtraCharge && bill.extraCharge ? (
+                  <div className="flex justify-between text-brand-green font-bold pb-1">
+                    <span>Extra Charge</span>
+                    <span className="font-mono font-bold text-brand-green-deep">+₹{bill.extraCharge.toFixed(2)}</span>
+                  </div>
+                ) : null}
+
+                <div className={`flex justify-between text-base font-black text-brand-green pt-1.5 ${
+                  showSubtotalAndBreakdown ? 'border-t border-brand-beige-dark' : ''
+                }`}>
                   <span>Total Due</span>
                   <span className="font-mono text-brand-green-deep">₹{bill.total.toFixed(2)}</span>
                 </div>

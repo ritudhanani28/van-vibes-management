@@ -17,6 +17,7 @@ export interface InvoiceRecord {
   taxAmount: number;
   discountPercentage?: number;
   discountAmount?: number;
+  extraCharge?: number;
   total: number;
   paymentMethod: string;
   paymentStatus: string;
@@ -38,12 +39,14 @@ export const billingApi = {
     return apiClient<BillData>(`/billing/${orderId}`);
   },
 
-  generateBill: async (orderId: string, discountPercentage?: number): Promise<BillData> => {
+  generateBill: async (orderId: string, discountPercentage?: number, extraCharge?: number): Promise<BillData> => {
     return apiClient<BillData>(`/billing/${orderId}/generate`, {
       method: 'POST',
       body: JSON.stringify({
         discount_percentage: discountPercentage ?? 0,
         discountPercentage: discountPercentage ?? 0,
+        extra_charge: extraCharge ?? 0,
+        extraCharge: extraCharge ?? 0,
       }),
     });
   },
@@ -60,12 +63,14 @@ export const billingApi = {
     return apiClient<BillData>(`/billing/sessions/${sessionId}`);
   },
 
-  generateSessionBill: async (sessionId: string, discountPercentage?: number): Promise<BillData> => {
+  generateSessionBill: async (sessionId: string, discountPercentage?: number, extraCharge?: number): Promise<BillData> => {
     return apiClient<BillData>(`/billing/sessions/${sessionId}/generate`, {
       method: 'POST',
       body: JSON.stringify({
         discount_percentage: discountPercentage ?? 0,
         discountPercentage: discountPercentage ?? 0,
+        extra_charge: extraCharge ?? 0,
+        extraCharge: extraCharge ?? 0,
       }),
     });
   },

@@ -8,7 +8,7 @@ import { Order, OrderStatus } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import { useAuth } from '@/context/AuthContext';
-import { Search, RefreshCw, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingBag } from 'lucide-react';
 
 export default function OrdersPage() {
   const { role } = useAuth();
@@ -18,17 +18,13 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
   const [selectedBillSessionId, setSelectedBillSessionId] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadOrders = useCallback(async () => {
-    setIsRefreshing(true);
     try {
       const all = await ordersApi.getOrders();
       setOrders(all);
     } catch (err) {
       console.error('Failed to load orders:', err);
-    } finally {
-      setIsRefreshing(false);
     }
   }, []);
 
@@ -131,15 +127,6 @@ export default function OrdersPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadOrders}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-brand-beige border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
         </div>
 
         {/* Filter Toolbar */}

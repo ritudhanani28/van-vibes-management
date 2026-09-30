@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  RefreshCw,
   Layers,
   AlertCircle,
   CreditCard,
@@ -104,14 +103,6 @@ export default function BillingPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadData}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-brand-beige border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all active:scale-95 cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
         </div>
 
         {/* Financial Metrics Summary */}
