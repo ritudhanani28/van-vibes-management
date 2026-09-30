@@ -8,7 +8,6 @@ import { Order, OrderStatus } from '@/types/cafe';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   ChefHat,
-  Flame,
   CheckCircle2,
   Clock,
   Bell,
@@ -144,13 +143,13 @@ export default function ChefKDSPage() {
     loadOrders();
   };
 
-  // Group kitchen orders according to required flow:
-  // 1. Incoming Orders: Orders accepted by Admin (status === ACCEPTED)
-  // 2. Accepted / In Kitchen: Orders marked Done by Chef (status === IN_KITCHEN or SERVED)
-  // 3. Completed Tickets
+  // Kitchen orders:
+  // 1. Incoming Orders: Orders accepted by Admin (status === ACCEPTED) - chef prepares and clicks Done
+  // 2. Completed / Prepared Orders: Orders marked Done or Completed
   const incomingOrders = orders.filter((o) => o.status === 'ACCEPTED');
-  const inKitchenOrders = orders.filter((o) => o.status === 'IN_KITCHEN' || o.status === 'SERVED');
-  const completedOrders = orders.filter((o) => o.status === 'COMPLETED');
+  const completedOrders = orders.filter(
+    (o) => o.status === 'COMPLETED' || o.status === 'IN_KITCHEN' || o.status === 'SERVED'
+  );
 
   const currentFilterLabel = DATE_FILTER_OPTIONS.find((o) => o.value === selectedFilter)?.label || 'Today';
 
@@ -238,7 +237,7 @@ export default function ChefKDSPage() {
           </div>
         </div>
 
-        {/* View Switcher: Live Active Pipeline vs Completed History */}
+        {/* View Switcher: Live Incoming Orders vs Completed History */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -249,7 +248,7 @@ export default function ChefKDSPage() {
                 : 'bg-white text-brand-green/70 hover:bg-brand-beige border border-brand-beige-dark'
             }`}
           >
-            Live Kitchen Pipeline ({incomingOrders.length + inKitchenOrders.length})
+            Live Kitchen Orders ({incomingOrders.length})
           </button>
           <button
             type="button"
@@ -265,75 +264,40 @@ export default function ChefKDSPage() {
         </div>
 
         {activeTab === 'live' ? (
-          /* 2 Stage Columns: 1. Incoming Orders (Done action) -> 2. Accepted / In Kitchen */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* STAGE 1: Incoming Orders (Admin Accepted -> Chef prepares, clicks Done) */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b-2 border-amber-500">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
-                  <h2 className="font-extrabold text-sm uppercase tracking-wider text-brand-green">
-                    1. Incoming Orders
-                  </h2>
-                </div>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono">
-                  {incomingOrders.length}
-                </span>
+          /* Incoming Orders (Admin Accepted -> Chef prepares, clicks Done) */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b-2 border-amber-500">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
+                <h2 className="font-extrabold text-sm uppercase tracking-wider text-brand-green">
+                  Incoming Orders
+                </h2>
               </div>
-
-              {incomingOrders.length === 0 ? (
-                <div className="p-8 rounded-2xl bg-white border border-brand-beige-dark text-center space-y-2">
-                  <Sparkles className="w-8 h-8 text-amber-500/40 mx-auto" />
-                  <p className="text-xs font-bold text-brand-green/60">No pending incoming orders</p>
-                  <p className="text-[11px] text-brand-green/40">Orders accepted by Admin will appear here for preparation</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {incomingOrders.map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      onUpdateStatus={handleUpdateStatus}
-                      isKitchenView={true}
-                    />
-                  ))}
-                </div>
-              )}
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono">
+                {incomingOrders.length}
+              </span>
             </div>
 
-            {/* STAGE 2: Accepted / In Kitchen */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b-2 border-blue-500">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-blue-600" />
-                  <h2 className="font-extrabold text-sm uppercase tracking-wider text-brand-green">
-                    2. Accepted / In Kitchen
-                  </h2>
-                </div>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-mono">
-                  {inKitchenOrders.length}
-                </span>
+            {incomingOrders.length === 0 ? (
+              <div className="p-12 rounded-3xl bg-white border border-brand-beige-dark text-center space-y-2">
+                <Sparkles className="w-10 h-10 text-amber-500/40 mx-auto" />
+                <p className="text-sm font-bold text-brand-green/70">No pending incoming orders</p>
+                <p className="text-xs text-brand-green/50">
+                  Orders accepted by Admin will appear here for kitchen preparation.
+                </p>
               </div>
-
-              {inKitchenOrders.length === 0 ? (
-                <div className="p-8 rounded-2xl bg-white border border-brand-beige-dark text-center space-y-2">
-                  <Clock className="w-8 h-8 text-blue-500/40 mx-auto" />
-                  <p className="text-xs font-bold text-brand-green/60">No orders currently cooking</p>
-                  <p className="text-[11px] text-brand-green/40">Orders marked Done move here while cooking in the kitchen</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {inKitchenOrders.map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      onUpdateStatus={handleUpdateStatus}
-                      isKitchenView={true}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {incomingOrders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onUpdateStatus={handleUpdateStatus}
+                    isKitchenView={true}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           /* Completed Orders View */
