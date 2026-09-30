@@ -110,7 +110,7 @@ export function AppLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-brand-beige-light flex items-center justify-center">
+      <div className="min-h-screen bg-brand-beige-light flex items-center justify-center" suppressHydrationWarning>
         <div className="w-8 h-8 rounded-full border-2 border-brand-green border-t-transparent animate-spin" />
       </div>
     );

@@ -32,6 +32,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const [discountError, setDiscountError] = useState<string | null>(null);
 
   const [isGeneratingFinalBill, setIsGeneratingFinalBill] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
 
   const fetchBill = useCallback(async () => {
@@ -130,9 +131,11 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
         return;
       }
       setBill(updatedBill);
+      setShowConfirmModal(false);
       onSettled?.();
     } catch (err: any) {
       setError(err.message || 'Failed to generate final bill');
+      setShowConfirmModal(false);
     } finally {
       setIsGeneratingFinalBill(false);
     }
@@ -243,11 +246,11 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                     <button
                       type="button"
                       disabled={isGeneratingFinalBill}
-                      onClick={handleGenerateFinalBill}
+                      onClick={() => setShowConfirmModal(true)}
                       className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-                      <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill & Free Table'}</span>
+                      <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill'}</span>
                     </button>
                   </div>
                 )}
@@ -442,8 +445,8 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 </div>
               </div>
 
-              {/* Settle Action in Modal if Pending */}
-              {!isPaid && (
+              {/* Settle Action in Modal ONLY after Bill is Generated */}
+              {isBillGenerated && !isPaid && (
                 <div className="no-print pt-3 flex items-center gap-2">
                   <button
                     type="button"
@@ -483,6 +486,51 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal for Generate Bill */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-brand-green-deep/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl p-5 shadow-2xl border border-brand-beige-dark space-y-4 animate-in zoom-in-95 duration-150 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-green shrink-0">
+                <FileText className="w-5 h-5 text-brand-gold" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-base text-brand-green leading-snug">Generate Final Bill?</h4>
+                <p className="text-[11px] text-brand-green/60">
+                  Table {bill?.tableNumber} {bill?.diningSessionId ? `• Session ${bill.diningSessionId}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-brand-green/80 leading-relaxed">
+              Are you sure you want to generate the final bill for this order? Once generated, this dining session will be <strong>permanently closed for new orders</strong>.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-brand-beige-dark/60">
+              <button
+                type="button"
+                disabled={isGeneratingFinalBill}
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 rounded-xl bg-brand-beige-light hover:bg-brand-beige text-brand-green font-bold text-xs transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isGeneratingFinalBill}
+                onClick={handleGenerateFinalBill}
+                className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {isGeneratingFinalBill ? 'Generating...' : 'Generate Bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

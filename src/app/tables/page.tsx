@@ -111,11 +111,28 @@ export default function TablesPage() {
     };
   }, [fetchTables]);
 
-  const handleCopyLink = (table: TableInfo) => {
+  const handleCopyLink = async (table: TableInfo) => {
     const url = table.qrCodeUrl || `http://localhost:3000/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(table.id);
-    setTimeout(() => setCopiedId(null), 2000);
+    try {
+      if (typeof window !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else if (typeof document !== 'undefined') {
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      setCopiedId(table.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
   };
 
   const handleAddTable = async (e: React.FormEvent) => {
