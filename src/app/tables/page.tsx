@@ -10,9 +10,10 @@ import {
   Printer,
   Copy,
   Check,
-  Plus,
   X,
   AlertCircle,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react';
 
 export default function TablesPage() {
@@ -25,6 +26,51 @@ export default function TablesPage() {
   const [newTableNumber, setNewTableNumber] = useState('');
   const [isSavingTable, setIsSavingTable] = useState(false);
   const [addTableError, setAddTableError] = useState<string | null>(null);
+
+  // 3-dots menu & Delete Modal state
+  const [openMenuTableId, setOpenMenuTableId] = useState<string | null>(null);
+  const [tableToDelete, setTableToDelete] = useState<TableInfo | null>(null);
+  const [isDeletingTable, setIsDeletingTable] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Close 3-dots menu on click outside or escape key
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-table-menu]')) {
+        return;
+      }
+      setOpenMenuTableId(null);
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpenMenuTableId(null);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleDeleteTable = async () => {
+    if (!tableToDelete) return;
+    try {
+      setIsDeletingTable(true);
+      setDeleteError(null);
+      await tablesApi.deleteTable(tableToDelete.id);
+      setTables((prev) => prev.filter((t) => t.id !== tableToDelete.id));
+      setTableToDelete(null);
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to delete table. Please try again.');
+    } finally {
+      setIsDeletingTable(false);
+    }
+  };
 
   const fetchTables = useCallback(async () => {
     try {
@@ -54,12 +100,14 @@ export default function TablesPage() {
     const unsubSession = wsManager.on('DINING_SESSION_OPENED', handleSessionUpdate);
     const unsubClosed = wsManager.on('DINING_SESSION_CLOSED', handleSessionUpdate);
     const unsubTableCreated = wsManager.on('TABLE_CREATED', handleSessionUpdate);
+    const unsubTableDeleted = wsManager.on('TABLE_DELETED', handleSessionUpdate);
 
     return () => {
       unsubStatus();
       unsubSession();
       unsubClosed();
       unsubTableCreated();
+      unsubTableDeleted();
     };
   }, [fetchTables]);
 
@@ -123,7 +171,6 @@ export default function TablesPage() {
             }}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-brand-gold" />
             <span>+ Add Table</span>
           </button>
         </div>
@@ -133,35 +180,71 @@ export default function TablesPage() {
           {tables.map((table) => (
             <div
               key={table.id}
-              className="bg-white rounded-2xl border border-brand-beige-dark p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              className={`bg-white rounded-2xl border border-brand-beige-dark p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between ${
+                openMenuTableId === table.id ? 'relative z-30' : 'relative z-0'
+              }`}
             >
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark/50">
                   <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-brand-green text-brand-beige font-black text-xs flex items-center justify-center font-mono">
+                    <span className="w-8 h-8 rounded-full bg-brand-green text-brand-beige font-black text-xs flex items-center justify-center font-mono shrink-0">
                       {table.tableNumber.toString().padStart(2, '0')}
                     </span>
                     <div>
-                      <h3 className="font-extrabold text-sm text-brand-green">
+                      <h3 className="font-extrabold text-sm text-brand-green leading-tight">
                         Table {table.tableNumber.toString().padStart(2, '0')}
                       </h3>
-                      <p className="text-[10px] text-brand-green/60 font-mono">{table.id} • {table.capacity} Seats</p>
+                      <span
+                        className={`text-[10px] uppercase font-black px-2 py-0.5 rounded border inline-block mt-0.5 ${
+                          table.status === 'OCCUPIED'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        {table.status}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span
-                      className={`text-[10px] uppercase font-black px-2 py-0.5 rounded border ${
-                        table.status === 'OCCUPIED'
-                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+
+                  {/* 3-dots Menu Button */}
+                  <div
+                    className={`relative ${openMenuTableId === table.id ? 'z-40' : 'z-10'}`}
+                    data-table-menu
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuTableId((prev) => (prev === table.id ? null : table.id));
+                      }}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        openMenuTableId === table.id
+                          ? 'bg-brand-beige text-brand-green ring-1 ring-brand-beige-dark'
+                          : 'hover:bg-brand-beige text-brand-green/60 hover:text-brand-green'
                       }`}
+                      aria-label={`Options for Table ${table.tableNumber}`}
                     >
-                      {table.status}
-                    </span>
-                    {table.activeSession && (
-                      <span className="text-[9px] font-mono font-bold text-amber-800 bg-amber-100/70 px-1.5 py-0.2 rounded">
-                        {table.activeSession.id}
-                      </span>
+                      <MoreVertical className="w-4 h-4 pointer-events-none" />
+                    </button>
+
+                    {openMenuTableId === table.id && (
+                      <div
+                        className="absolute right-0 top-9 w-40 bg-white rounded-xl shadow-xl border border-brand-beige-dark p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuTableId(null);
+                            setTableToDelete(table);
+                            setDeleteError(null);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-colors text-left cursor-pointer group"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+                          <span>Delete Table</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -341,6 +424,69 @@ export default function TablesPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Table Confirmation Modal */}
+      {tableToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full space-y-4 shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark/60">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-sm border border-red-200">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-black text-brand-green">Delete Table</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDeletingTable) setTableToDelete(null);
+                }}
+                className="text-brand-green/60 hover:text-brand-green p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {deleteError && (
+              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-brand-green/70">
+              Are you sure you want to delete <span className="font-bold text-brand-green">Table {tableToDelete.tableNumber.toString().padStart(2, '0')}</span>? This will remove the table and deactivate its QR standee.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingTable}
+                onClick={() => setTableToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-brand-beige hover:bg-brand-beige-dark text-brand-green text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingTable}
+                onClick={handleDeleteTable}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow-xs transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingTable ? (
+                  <>
+                    <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Delete Table</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   );
 }

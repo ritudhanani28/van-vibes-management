@@ -76,7 +76,10 @@ export default function MenuItemsAdminPage() {
   // Close dropdown on click outside or escape key
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
-      setActiveDropdownId(null);
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('[data-item-menu]')) {
+        setActiveDropdownId(null);
+      }
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
         setIsCategoryOpen(false);
       }
@@ -426,17 +429,17 @@ export default function MenuItemsAdminPage() {
                     </div>
 
                     {/* Three-dot dropdown menu */}
-                    <div className="relative">
+                    <div className="relative" data-item-menu>
                       <button
                         type="button"
                         aria-label={`Actions for ${dish.name}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveDropdownId(activeDropdownId === dish.id ? null : dish.id);
+                          setActiveDropdownId((prev) => (prev === dish.id ? null : dish.id));
                         }}
-                        className="p-1.5 rounded-lg hover:bg-brand-beige text-brand-green/60 hover:text-brand-green transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center"
+                        className="p-1.5 rounded-lg hover:bg-brand-beige text-brand-green/60 hover:text-brand-green transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreVertical className="w-4 h-4 pointer-events-none" />
                       </button>
 
                       {activeDropdownId === dish.id && (

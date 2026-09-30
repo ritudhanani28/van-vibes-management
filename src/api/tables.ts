@@ -33,6 +33,12 @@ export const tablesApi = {
     return apiClient<StandeeData>(`/tables/${tableId}/standee`);
   },
 
+  deleteTable: async (tableId: string): Promise<{ message: string; id: string }> => {
+    return apiClient<{ message: string; id: string }>(`/tables/${tableId}`, {
+      method: 'DELETE',
+    });
+  },
+
   getQrCodeUrl: (tableId: string): string => {
     return `${API_BASE_URL}/tables/${tableId}/qr`;
   },
