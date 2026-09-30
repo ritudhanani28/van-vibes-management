@@ -1,6 +1,7 @@
 export type OrderStatus =
   | 'PLACED'
   | 'ACCEPTED'
+  | 'IN_KITCHEN'
   | 'SERVED'
   | 'COMPLETED'
   | 'CANCELLED'

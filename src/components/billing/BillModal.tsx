@@ -284,8 +284,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <span className="tracking-tight font-serif">CAFE</span>
                 </div>
                 <p className="text-xs text-brand-green/70">A Quiet Corner for Real Conversations</p>
-                <p className="text-[11px] text-brand-green/60 font-mono">GSTIN: 24AAAFV1234A1Z5</p>
-              </div>
+                              </div>
 
               {/* Invoice & Order Metadata */}
               <div className="grid grid-cols-2 gap-2 text-xs py-2 border-b border-brand-beige-dark/60 text-brand-green">
@@ -427,30 +426,17 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 </div>
               )}
 
-              {/* Totals & GST calculation */}
+              {/* Bill Totals (No GST or Subtotal) */}
               <div className="pt-3 border-t-2 border-brand-green space-y-1.5 text-xs">
-                <div className="flex justify-between text-brand-green/70">
-                  <span>Subtotal</span>
-                  <span className="font-mono font-bold">₹{bill.subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-brand-green/70">
-                  <span>CGST (2.5%)</span>
-                  <span className="font-mono font-bold">₹{bill.cgst.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-brand-green/70">
-                  <span>SGST (2.5%)</span>
-                  <span className="font-mono font-bold">₹{bill.sgst.toFixed(2)}</span>
-                </div>
-
                 {/* Bill-level discount line appears dynamically only when discount applied */}
                 {bill.discountAmount && bill.discountAmount > 0 ? (
-                  <div className="flex justify-between text-brand-green font-bold">
+                  <div className="flex justify-between text-brand-green font-bold pb-2 border-b border-brand-beige-dark">
                     <span>Discount ({bill.discountPercentage || Math.round((bill.discountAmount / (bill.subtotal || 1)) * 100)}%)</span>
                     <span className="font-mono font-bold">-₹{bill.discountAmount.toFixed(2)}</span>
                   </div>
                 ) : null}
 
-                <div className="flex justify-between text-base font-black text-brand-green pt-2 border-t border-brand-beige-dark">
+                <div className="flex justify-between text-base font-black text-brand-green">
                   <span>Total Due</span>
                   <span className="font-mono text-brand-green-deep">₹{bill.total.toFixed(2)}</span>
                 </div>

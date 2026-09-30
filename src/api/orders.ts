@@ -21,6 +21,12 @@ export const ordersApi = {
     });
   },
 
+  doneOrder: async (orderId: string): Promise<Order> => {
+    return apiClient<Order>(`/orders/${orderId}/done`, {
+      method: 'POST',
+    });
+  },
+
   serveOrder: async (orderId: string): Promise<Order> => {
     return apiClient<Order>(`/orders/${orderId}/serve`, {
       method: 'POST',

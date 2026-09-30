@@ -15,6 +15,13 @@ export const tablesApi = {
     return apiClient<TableInfo[]>('/tables');
   },
 
+  createTable: async (tableNumber: number, capacity: number = 4): Promise<TableInfo> => {
+    return apiClient<TableInfo>('/tables', {
+      method: 'POST',
+      body: JSON.stringify({ tableNumber, capacity }),
+    });
+  },
+
   updateStatus: async (tableId: string, status: TableStatus): Promise<TableInfo> => {
     return apiClient<TableInfo>(`/tables/${tableId}/status`, {
       method: 'PATCH',

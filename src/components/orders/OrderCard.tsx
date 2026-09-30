@@ -43,8 +43,13 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
         };
       case 'ACCEPTED':
         return {
-          label: 'Accepted',
+          label: isChef ? 'Incoming Order' : 'Accepted',
           color: 'bg-blue-100 text-blue-900 border-blue-300',
+        };
+      case 'IN_KITCHEN':
+        return {
+          label: 'In Kitchen',
+          color: 'bg-indigo-100 text-indigo-900 border-indigo-300',
         };
       case 'SERVED':
         return {
@@ -86,6 +91,20 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   const getNextAction = (
     status: OrderStatus
   ): { target: OrderStatus; label: string; loadingLabel: string; icon: React.ReactNode } | null => {
+    // CHEF SIDE: ONLY "DONE" ACTION FOR INCOMING ORDERS (ACCEPTED). NO ACCEPT, NO BILL.
+    if (isChef) {
+      if (status === 'ACCEPTED') {
+        return {
+          target: 'IN_KITCHEN',
+          label: 'Done',
+          loadingLabel: 'Updating...',
+          icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />,
+        };
+      }
+      return null;
+    }
+
+    // ADMIN ACTIONS
     switch (status) {
       case 'PLACED':
       case 'ORDER_PLACED':
@@ -96,6 +115,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           icon: <CheckCircle2 className="w-4 h-4 text-brand-gold" />,
         };
       case 'ACCEPTED':
+      case 'IN_KITCHEN':
       case 'SERVED':
         return {
           target: 'COMPLETED',
@@ -327,16 +347,9 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
         {/* Financial info for Admin ONLY / Kitchen summary for Chef */}
         {!isChef ? (
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] uppercase font-bold text-brand-green/40 block">
-                Total
-              </span>
-              {order.subtotal && order.subtotal !== order.total && (
-                <span className="text-[10px] text-brand-green/50 font-mono">
-                  (Subtotal: ₹{order.subtotal.toFixed(0)})
-                </span>
-              )}
-            </div>
+            <span className="text-[10px] uppercase font-bold text-brand-green/40 block">
+              Total Due
+            </span>
             <span className="font-mono font-black text-base text-brand-green">
               ₹{(order.total ?? 0).toFixed(0)}
             </span>
@@ -414,7 +427,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           )}
 
           {/* Billing Action ONLY when order is COMPLETED */}
-          {!isChef && order.status === 'COMPLETED' && onOpenBill && (
+          {!isChef && (order.status === 'COMPLETED' || order.status === 'IN_KITCHEN' || order.status === 'SERVED') && onOpenBill && (
             <button
               type="button"
               onClick={() => onOpenBill(order.id)}

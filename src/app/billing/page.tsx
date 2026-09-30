@@ -415,8 +415,6 @@ export default function BillingPage() {
                     <th className="py-3 px-4">Table</th>
                     <th className="py-3 px-4">Session</th>
                     <th className="py-3 px-4">Guest</th>
-                    <th className="py-3 px-4">Subtotal</th>
-                    <th className="py-3 px-4">GST (5%)</th>
                     <th className="py-3 px-4">Discount</th>
                     <th className="py-3 px-4">Total</th>
                     <th className="py-3 px-4">Payment</th>
@@ -446,8 +444,6 @@ export default function BillingPage() {
                             {inv.diningSessionId || '--'}
                           </td>
                           <td className="py-3.5 px-4 font-bold">{inv.customerName || 'Dining Guest'}</td>
-                          <td className="py-3.5 px-4 font-mono">₹{inv.subtotal.toFixed(2)}</td>
-                          <td className="py-3.5 px-4 font-mono text-brand-green/70">₹{inv.taxAmount.toFixed(2)}</td>
                           <td className="py-3.5 px-4 font-mono text-brand-green font-bold">
                             {inv.discountAmount && inv.discountAmount > 0
                               ? `-₹${inv.discountAmount.toFixed(2)} (${inv.discountPercentage}%)`

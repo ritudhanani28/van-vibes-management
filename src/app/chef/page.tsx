@@ -1,38 +1,69 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/components/orders/OrderCard';
-import { Order, OrderStatus } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
+import { Order, OrderStatus } from '@/types/cafe';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   ChefHat,
+  Flame,
+  CheckCircle2,
+  Clock,
   Bell,
   BellOff,
-  Clock,
   Sparkles,
-  CheckCircle2,
-  RefreshCw,
-  Send,
-  Flame,
+  Calendar,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
+
+type DateFilterOption = {
+  label: string;
+  value: 'today' | 'yesterday' | 'this_month' | 'this_year';
+};
+
+const DATE_FILTER_OPTIONS: DateFilterOption[] = [
+  { label: 'Today', value: 'today' },
+  { label: 'Yesterday', value: 'yesterday' },
+  { label: 'This Month', value: 'this_month' },
+  { label: 'This Year', value: 'this_year' },
+];
 
 export default function ChefKDSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activeTab, setActiveTab] = useState<'live' | 'completed'>('live');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chimeEnabled, setChimeEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState<'live' | 'completed'>('live');
 
+  // Date Filter State
+  const [selectedFilter, setSelectedFilter] = useState<'today' | 'yesterday' | 'this_month' | 'this_year'>('today');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Web Audio Kitchen chime for incoming orders
   const playKitchenChime = useCallback(() => {
-    if (!chimeEnabled || typeof window === 'undefined') return;
+    if (!chimeEnabled) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880.0, ctx.currentTime + 0.15); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880.0, ctx.currentTime + 0.15);
       gain.gain.setValueAtTime(0.2, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
       osc.connect(gain);
@@ -44,32 +75,33 @@ export default function ChefKDSPage() {
     }
   }, [chimeEnabled]);
 
+  // Load orders filtered by date range on the backend
   const loadOrders = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const all = await ordersApi.getOrders();
-      setOrders(all);
+      const filtered = await ordersApi.getOrders({ range: selectedFilter });
+      setOrders(filtered);
     } catch (err) {
       console.error('Failed to load orders for Chef KDS:', err);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [selectedFilter]);
 
   useEffect(() => {
     loadOrders();
 
-    const handleNewOrder = (newOrder: Order) => {
-      setOrders((prev) => {
-        if (prev.some((o) => o.id === newOrder.id)) return prev;
-        return [newOrder, ...prev];
-      });
+    // Order accepted by Admin -> appears as Incoming Order for Chef
+    const handleOrderAccepted = (acceptedOrder: any) => {
+      const orderId = acceptedOrder?.orderId || acceptedOrder?.id;
+      if (!orderId) return;
+      loadOrders();
       playKitchenChime();
     };
 
-    const unsubPlaced = wsManager.on('ORDER_PLACED', handleNewOrder);
-    const unsubCreated = wsManager.on('ORDER_CREATED', handleNewOrder);
+    const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleOrderAccepted);
 
+    // Order status transitions (IN_KITCHEN, COMPLETED, etc.)
     const handleStatusTransition = (data: { orderId?: string; order_id?: string; status: OrderStatus; updatedAt?: string; updated_at?: string }) => {
       const id = data.orderId || data.order_id;
       const st = data.status;
@@ -80,7 +112,7 @@ export default function ChefKDSPage() {
       );
     };
 
-    const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleStatusTransition);
+    const unsubInKitchen = wsManager.on('ORDER_IN_KITCHEN', handleStatusTransition);
     const unsubServed = wsManager.on('ORDER_SERVED', handleStatusTransition);
     const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleStatusTransition);
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
@@ -88,19 +120,19 @@ export default function ChefKDSPage() {
     const interval = setInterval(loadOrders, 10000);
     return () => {
       clearInterval(interval);
-      unsubPlaced();
-      unsubCreated();
       unsubAccepted();
+      unsubInKitchen();
       unsubServed();
       unsubCompleted();
       unsubUpdated();
     };
   }, [loadOrders, playKitchenChime]);
 
+  // Chef action: Only "Done" action allowed, moving from ACCEPTED to IN_KITCHEN
   const handleUpdateStatus = async (orderId: string, nextStatus: OrderStatus) => {
     try {
-      if (nextStatus === 'ACCEPTED') {
-        await ordersApi.acceptOrder(orderId);
+      if (nextStatus === 'IN_KITCHEN') {
+        await ordersApi.doneOrder(orderId);
       } else if (nextStatus === 'COMPLETED' || nextStatus === 'SERVED') {
         await ordersApi.completeOrder(orderId);
       } else {
@@ -112,10 +144,15 @@ export default function ChefKDSPage() {
     loadOrders();
   };
 
-  // Group kitchen orders into sequential stages
-  const placedOrders = orders.filter((o) => o.status === 'PLACED' || o.status === 'ORDER_PLACED');
-  const acceptedOrders = orders.filter((o) => o.status === 'ACCEPTED' || o.status === 'SERVED');
+  // Group kitchen orders according to required flow:
+  // 1. Incoming Orders: Orders accepted by Admin (status === ACCEPTED)
+  // 2. Accepted / In Kitchen: Orders marked Done by Chef (status === IN_KITCHEN or SERVED)
+  // 3. Completed Tickets
+  const incomingOrders = orders.filter((o) => o.status === 'ACCEPTED');
+  const inKitchenOrders = orders.filter((o) => o.status === 'IN_KITCHEN' || o.status === 'SERVED');
   const completedOrders = orders.filter((o) => o.status === 'COMPLETED');
+
+  const currentFilterLabel = DATE_FILTER_OPTIONS.find((o) => o.value === selectedFilter)?.label || 'Today';
 
   return (
     <AppLayout requiredRole="CHEF">
@@ -142,27 +179,61 @@ export default function ChefKDSPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Custom Date Filter Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-brand-green-light hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all border border-brand-gold/30 cursor-pointer shadow-2xs"
+                aria-haspopup="listbox"
+                aria-expanded={isDropdownOpen}
+              >
+                <Calendar className="w-3.5 h-3.5 text-brand-gold" />
+                <span>{currentFilterLabel}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-brand-gold transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-brand-beige-dark p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-brand-green/40 px-2 py-1">
+                    Filter by Period
+                  </div>
+                  {DATE_FILTER_OPTIONS.map((option) => {
+                    const isSelected = selectedFilter === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFilter(option.value);
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          isSelected
+                            ? 'bg-brand-green text-brand-beige'
+                            : 'text-brand-green hover:bg-brand-beige-light'
+                        }`}
+                      >
+                        <span>{option.label}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-brand-gold" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => setChimeEnabled(!chimeEnabled)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 chimeEnabled
                   ? 'bg-brand-gold text-brand-green'
                   : 'bg-brand-green-light text-brand-beige'
               }`}
             >
               {chimeEnabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-              <span>{chimeEnabled ? 'Order Sound ON' : 'Muted'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={loadOrders}
-              disabled={isRefreshing}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-brand-green-light hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
+              <span>{chimeEnabled ? 'Sound ON' : 'Muted'}</span>
             </button>
           </div>
         </div>
@@ -178,7 +249,7 @@ export default function ChefKDSPage() {
                 : 'bg-white text-brand-green/70 hover:bg-brand-beige border border-brand-beige-dark'
             }`}
           >
-            Live Kitchen Pipeline ({placedOrders.length + acceptedOrders.length})
+            Live Kitchen Pipeline ({incomingOrders.length + inKitchenOrders.length})
           </button>
           <button
             type="button"
@@ -194,31 +265,31 @@ export default function ChefKDSPage() {
         </div>
 
         {activeTab === 'live' ? (
-          /* 2 Stage Columns: PLACED -> ACCEPTED (Ready to Complete) */
+          /* 2 Stage Columns: 1. Incoming Orders (Done action) -> 2. Accepted / In Kitchen */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* STAGE 1: Placed (Incoming) */}
+            {/* STAGE 1: Incoming Orders (Admin Accepted -> Chef prepares, clicks Done) */}
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b-2 border-amber-500">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
                   <h2 className="font-extrabold text-sm uppercase tracking-wider text-brand-green">
-                    1. Placed (Incoming)
+                    1. Incoming Orders
                   </h2>
                 </div>
                 <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono">
-                  {placedOrders.length}
+                  {incomingOrders.length}
                 </span>
               </div>
 
-              {placedOrders.length === 0 ? (
+              {incomingOrders.length === 0 ? (
                 <div className="p-8 rounded-2xl bg-white border border-brand-beige-dark text-center space-y-2">
                   <Sparkles className="w-8 h-8 text-amber-500/40 mx-auto" />
                   <p className="text-xs font-bold text-brand-green/60">No pending incoming orders</p>
-                  <p className="text-[11px] text-brand-green/40">New customer orders will ring here</p>
+                  <p className="text-[11px] text-brand-green/40">Orders accepted by Admin will appear here for preparation</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {placedOrders.map((order) => (
+                  {incomingOrders.map((order) => (
                     <OrderCard
                       key={order.id}
                       order={order}
@@ -230,29 +301,29 @@ export default function ChefKDSPage() {
               )}
             </div>
 
-            {/* STAGE 2: Accepted (Cooking / In Kitchen -> Complete Order) */}
+            {/* STAGE 2: Accepted / In Kitchen */}
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b-2 border-blue-500">
                 <div className="flex items-center gap-2">
                   <Flame className="w-4 h-4 text-blue-600" />
                   <h2 className="font-extrabold text-sm uppercase tracking-wider text-brand-green">
-                    2. Accepted (In Kitchen)
+                    2. Accepted / In Kitchen
                   </h2>
                 </div>
                 <span className="text-xs font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-mono">
-                  {acceptedOrders.length}
+                  {inKitchenOrders.length}
                 </span>
               </div>
 
-              {acceptedOrders.length === 0 ? (
+              {inKitchenOrders.length === 0 ? (
                 <div className="p-8 rounded-2xl bg-white border border-brand-beige-dark text-center space-y-2">
                   <Clock className="w-8 h-8 text-blue-500/40 mx-auto" />
                   <p className="text-xs font-bold text-brand-green/60">No orders currently cooking</p>
-                  <p className="text-[11px] text-brand-green/40">Accept incoming orders to begin preparation</p>
+                  <p className="text-[11px] text-brand-green/40">Orders marked Done move here while cooking in the kitchen</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {acceptedOrders.map((order) => (
+                  {inKitchenOrders.map((order) => (
                     <OrderCard
                       key={order.id}
                       order={order}
@@ -279,7 +350,7 @@ export default function ChefKDSPage() {
             {completedOrders.length === 0 ? (
               <div className="p-12 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-2">
                 <Clock className="w-8 h-8 text-brand-green/30 mx-auto" />
-                <p className="text-xs font-bold text-brand-green/60">No completed tickets yet today</p>
+                <p className="text-xs font-bold text-brand-green/60">No completed tickets found for selected period</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

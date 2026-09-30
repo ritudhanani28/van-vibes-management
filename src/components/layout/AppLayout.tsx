@@ -19,6 +19,7 @@ import {
   UtensilsCrossed,
   ShieldCheck,
   ChevronRight,
+  Users,
 } from 'lucide-react';
 
 interface NavItem {
@@ -45,12 +46,19 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['CHEF', 'ADMIN'],
     badge: 'Live',
   },
-  // Orders Management (Both)
+  // Orders Management (Admin Only)
   {
     name: 'Orders',
     href: '/orders',
     icon: ShoppingBag,
-    roles: ['ADMIN', 'CHEF'],
+    roles: ['ADMIN'],
+  },
+  // Chef Management (Admin Only)
+  {
+    name: 'Chef Management',
+    href: '/chefs',
+    icon: Users,
+    roles: ['ADMIN'],
   },
   // Billing & Settlement (Admin Only)
   {

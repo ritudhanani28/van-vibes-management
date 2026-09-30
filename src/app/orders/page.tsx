@@ -57,6 +57,7 @@ export default function OrdersPage() {
     };
 
     const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleStatusTransition);
+    const unsubInKitchen = wsManager.on('ORDER_IN_KITCHEN', handleStatusTransition);
     const unsubServed = wsManager.on('ORDER_SERVED', handleStatusTransition);
     const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleStatusTransition);
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
@@ -67,6 +68,7 @@ export default function OrdersPage() {
       unsubPlaced();
       unsubCreated();
       unsubAccepted();
+      unsubInKitchen();
       unsubServed();
       unsubCompleted();
       unsubUpdated();
@@ -109,7 +111,7 @@ export default function OrdersPage() {
   });
 
   return (
-    <AppLayout>
+    <AppLayout requiredRole="ADMIN">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Settings, Store, Clock, Printer, Save, Check } from 'lucide-react';
+import { Store, Clock, Save, Check } from 'lucide-react';
 
 export default function CafeSettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -21,7 +21,7 @@ export default function CafeSettingsPage() {
             Cafe Operational Settings
           </h1>
           <p className="text-xs text-brand-green/70 mt-0.5">
-            Configure cafe branding, GST registration, ordering parameters, and printer options.
+            Configure cafe branding, ordering parameters, and kitchen display options.
           </p>
         </div>
 
@@ -39,24 +39,6 @@ export default function CafeSettingsPage() {
                   type="text"
                   defaultValue="Vaan Vibes Cafe & Restro"
                   className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-brand-green">GST / Tax Registration #</label>
-                <input
-                  type="text"
-                  defaultValue="24AAACV1234F1Z5"
-                  className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs font-mono"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-brand-green">GST Rate (%)</label>
-                <input
-                  type="number"
-                  defaultValue={5}
-                  className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs font-mono"
                 />
               </div>
 
