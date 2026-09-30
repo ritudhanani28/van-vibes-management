@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { authApi } from '@/api/auth';
-import { User } from '@/types/auth';
+import { User, UserRole } from '@/types/auth';
 import {
   ChefHat,
   Plus,
@@ -15,29 +15,55 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
+  Trash2,
+  Edit3,
 } from 'lucide-react';
 
 export default function ChefManagementPage() {
   const [chefs, setChefs] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  // Add Chef Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addContact, setAddContact] = useState('');
+  const [addRole, setAddRole] = useState<UserRole>('CHEF');
+  const [addPassword, setAddPassword] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Edit Chef Modal State
+  const [editingChef, setEditingChef] = useState<User | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('CHEF');
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete Confirmation Modal State
+  const [chefToDelete, setChefToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Success Notification Banner
   const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
+
+  const showSuccessBanner = (message: string) => {
+    setBannerSuccess(message);
+    setTimeout(() => setBannerSuccess(null), 4000);
+  };
 
   const fetchChefs = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await authApi.getChefs();
       setChefs(data);
-    } catch (err) {
-      console.error('Failed to load chefs:', err);
+    } catch (err: any) {
+      console.error('Error fetching chefs:', err);
     } finally {
       setIsLoading(false);
     }
@@ -47,166 +73,366 @@ export default function ChefManagementPage() {
     fetchChefs();
   }, [fetchChefs]);
 
-  const handleOpenModal = () => {
-    setName('');
-    setEmail('');
-    setContactNumber('');
-    setPassword('');
-    setFormError(null);
-    setIsModalOpen(true);
+  // Validation Helpers
+  const validateContactNumber = (num: string): string | null => {
+    const trimmed = num.trim();
+    if (!trimmed) {
+      return 'Contact number is required.';
+    }
+    const digitsOnly = trimmed.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      return 'Contact number must contain at least 10 digits.';
+    }
+    if (digitsOnly.length > 15) {
+      return 'Contact number is too long (maximum 15 digits).';
+    }
+    return null;
   };
 
-  const handleCloseModal = () => {
-    if (isSubmitting) return;
-    setIsModalOpen(false);
-    setFormError(null);
+  const validatePasswordStrength = (pwd: string): string | null => {
+    if (!pwd) {
+      return 'Password is required.';
+    }
+    if (pwd.length < 6) {
+      return 'Password must be at least 6 characters long.';
+    }
+    if (!/[A-Z]/.test(pwd)) {
+      return 'Password must contain at least one uppercase letter (A-Z).';
+    }
+    if (!/[a-z]/.test(pwd)) {
+      return 'Password must contain at least one lowercase letter (a-z).';
+    }
+    if (!/[0-9]/.test(pwd)) {
+      return 'Password must contain at least one number (0-9).';
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]/.test(pwd)) {
+      return 'Password must contain at least one special character (!@#$%^&*...).';
+    }
+    return null;
   };
 
-  const handleCreateChef = async (e: React.FormEvent) => {
+  // Open Add Chef Modal
+  const handleOpenAddModal = () => {
+    setAddName('');
+    setAddEmail('');
+    setAddContact('');
+    setAddRole('CHEF');
+    setAddPassword('');
+    setAddError(null);
+    setIsAddModalOpen(true);
+  };
+
+  // Handle Add Chef Submission
+  const handleAddChef = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
+    setAddError(null);
 
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const trimmedContact = contactNumber.trim();
+    const trimmedName = addName.trim();
+    const trimmedEmail = addEmail.trim();
 
     if (!trimmedName) {
-      setFormError('Chef name is required.');
+      setAddError('Chef name is required.');
       return;
     }
     if (!trimmedEmail) {
-      setFormError('Email address is required.');
+      setAddError('Email address is required.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setFormError('Please enter a valid email address.');
+      setAddError('Please enter a valid email address (e.g. chef@vaanvibes.in).');
       return;
     }
-    if (!trimmedContact) {
-      setFormError('Contact number is required.');
+
+    const contactErr = validateContactNumber(addContact);
+    if (contactErr) {
+      setAddError(contactErr);
       return;
     }
-    if (!password || password.length < 6) {
-      setFormError('Password must be at least 6 characters long.');
+
+    if (!addRole || addRole !== 'CHEF') {
+      setAddError('Role must be Chef.');
+      return;
+    }
+
+    const passErr = validatePasswordStrength(addPassword);
+    if (passErr) {
+      setAddError(passErr);
       return;
     }
 
     try {
-      setIsSubmitting(true);
+      setIsAdding(true);
       const newChef = await authApi.createChef({
         name: trimmedName,
         email: trimmedEmail,
-        contactNumber: trimmedContact,
-        password,
+        contactNumber: addContact.trim(),
+        role: 'CHEF',
+        password: addPassword,
       });
 
-      // Update state without manual refresh
       setChefs((prev) => [newChef, ...prev]);
-      setIsModalOpen(false);
-      setBannerSuccess(`Chef ${newChef.name} created successfully.`);
-      setTimeout(() => setBannerSuccess(null), 4000);
+      showSuccessBanner(`Chef "${newChef.name}" account created successfully.`);
+      setIsAddModalOpen(false);
     } catch (err: any) {
-      setFormError(err?.message || 'Failed to create chef account. Email may already be registered.');
+      setAddError(err?.message || 'Failed to create chef account. Email may already be registered.');
     } finally {
-      setIsSubmitting(false);
+      setIsAdding(false);
+    }
+  };
+
+  // Open Edit Chef Modal Directly (Only via Edit button in Actions column)
+  const handleOpenEditModal = (chef: User) => {
+    setEditingChef(chef);
+    setEditName(chef.name || '');
+    setEditEmail(chef.email || '');
+    setEditContact(chef.contactNumber || chef.contact_number || '');
+    setEditRole('CHEF');
+    setEditIsActive(chef.is_active !== undefined ? chef.is_active : true);
+    setEditError(null);
+    setIsEditModalOpen(true);
+  };
+
+  // Handle Edit Chef Submission
+  const handleSaveEditChef = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingChef) return;
+    setEditError(null);
+
+    const trimmedName = editName.trim();
+    const trimmedEmail = editEmail.trim();
+
+    if (!trimmedName) {
+      setEditError('Chef name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setEditError('Email address is required.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEditError('Please enter a valid email address.');
+      return;
+    }
+
+    const contactErr = validateContactNumber(editContact);
+    if (contactErr) {
+      setEditError(contactErr);
+      return;
+    }
+
+    try {
+      setIsSavingEdit(true);
+      const updated = await authApi.updateChef(editingChef.id, {
+        name: trimmedName,
+        email: trimmedEmail,
+        contactNumber: editContact.trim(),
+        role: 'CHEF',
+        isActive: editIsActive,
+      });
+
+      setChefs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      showSuccessBanner(`Chef "${updated.name}" details updated successfully.`);
+
+      setIsEditModalOpen(false);
+      setEditingChef(null);
+    } catch (err: any) {
+      setEditError(err?.message || 'Failed to update chef details.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle Delete Chef
+  const handleDeleteChef = async () => {
+    if (!chefToDelete) return;
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+      await authApi.deleteChef(chefToDelete.id);
+      setChefs((prev) => prev.filter((c) => c.id !== chefToDelete.id));
+      showSuccessBanner(`Chef "${chefToDelete.name}" was successfully removed.`);
+      setChefToDelete(null);
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to delete chef. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   return (
     <AppLayout requiredRole="ADMIN">
       <div className="space-y-6">
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-brand-green tracking-tight">
-                Chef Management
-              </h1>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-brand-green text-brand-beige">
-                {chefs.length} Active Chefs
-              </span>
+        {/* Success Banner */}
+        {bannerSuccess && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2 font-medium text-sm">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{bannerSuccess}</span>
             </div>
-            <p className="text-xs text-brand-green/70 mt-0.5">
-              Create and manage kitchen staff accounts with Chef role access.
+            <button
+              onClick={() => setBannerSuccess(null)}
+              className="text-emerald-500 hover:text-emerald-700 p-1 rounded-lg hover:bg-emerald-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Top Header Card */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-brand-beige-dark shadow-2xs">
+          <div>
+            <h1 className="text-2xl font-black text-brand-green flex items-center gap-2.5">
+              <div className="p-2 bg-brand-beige rounded-2xl border border-brand-gold/40 text-brand-green">
+                <ChefHat className="w-6 h-6" />
+              </div>
+              Chef Management
+            </h1>
+            <p className="text-xs text-brand-green/60 mt-1 font-medium">
+              Manage and configure kitchen staff accounts and access credentials
             </p>
           </div>
 
           <button
-            type="button"
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+            onClick={handleOpenAddModal}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-brand-green hover:bg-brand-green-hover text-white font-black text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-brand-gold" />
-            <span>Add Chef</span>
+            <Plus className="w-4 h-4" />
+            <span>Add New Chef</span>
           </button>
         </div>
 
-        {bannerSuccess && (
-          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 shadow-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-semibold">{bannerSuccess}</span>
-          </div>
-        )}
-
-        {/* Chefs Table / List */}
-        <div className="bg-white rounded-3xl border border-brand-beige-dark overflow-hidden shadow-xs">
-          <div className="px-5 py-4 border-b border-brand-beige-dark/50 flex items-center justify-between">
+        {/* Chefs List / Table Card */}
+        <div className="bg-white rounded-3xl border border-brand-beige-dark shadow-2xs overflow-hidden">
+          <div className="p-5 border-b border-brand-beige-dark flex items-center justify-between bg-brand-beige/20">
             <div className="flex items-center gap-2">
-              <ChefHat className="w-4 h-4 text-brand-gold" />
-              <h2 className="font-extrabold text-sm text-brand-green">Registered Kitchen Staff</h2>
+              <Users className="w-4 h-4 text-brand-green/70" />
+              <h2 className="font-extrabold text-sm text-brand-green">Registered Chefs</h2>
             </div>
+            <span className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-full border border-brand-beige-dark text-brand-green">
+              {chefs.length} {chefs.length === 1 ? 'Chef' : 'Chefs'}
+            </span>
           </div>
 
           {isLoading ? (
-            <div className="py-16 text-center">
-              <Loader2 className="w-8 h-8 text-brand-green/40 animate-spin mx-auto" />
-              <p className="text-xs text-brand-green/60 mt-2 font-medium">Loading chef accounts...</p>
+            <div className="flex flex-col items-center justify-center py-20 text-brand-green/60 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-brand-gold" />
+              <span className="text-xs font-bold uppercase tracking-wider">Loading kitchen staff...</span>
             </div>
           ) : chefs.length === 0 ? (
-            <div className="py-16 text-center space-y-3">
-              <Users className="w-10 h-10 text-brand-green/20 mx-auto" />
-              <h3 className="font-extrabold text-brand-green text-sm">No chef accounts found</h3>
-              <p className="text-xs text-brand-green/60 max-w-sm mx-auto">
-                No chef accounts have been created yet. Click "+ Add Chef" to create a kitchen account.
+            <div className="text-center py-16 px-4">
+              <div className="w-16 h-16 rounded-3xl bg-brand-beige flex items-center justify-center mx-auto mb-4 border border-brand-gold/40 text-2xl">
+                👨‍🍳
+              </div>
+              <h3 className="text-base font-extrabold text-brand-green mb-1">No Chefs Found</h3>
+              <p className="text-xs text-brand-green/60 max-w-sm mx-auto mb-6">
+                Get started by adding your first kitchen staff member to grant access to the kitchen display.
               </p>
+              <button
+                onClick={handleOpenAddModal}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-green text-white text-xs font-bold hover:bg-brand-green-hover transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add First Chef
+              </button>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-brand-beige-dark bg-brand-beige-light/50 text-[11px] font-bold text-brand-green/60 uppercase tracking-wider">
-                    <th className="px-5 py-3">Chef Name</th>
-                    <th className="px-5 py-3">Email</th>
-                    <th className="px-5 py-3">Contact Number</th>
-                    <th className="px-5 py-3">Role</th>
-                    <th className="px-5 py-3 text-right">Account Status</th>
+                  <tr className="border-b border-brand-beige-dark bg-brand-beige-light/60 text-[11px] font-bold text-brand-green/70 uppercase tracking-wider">
+                    <th className="px-5 py-3.5">Chef</th>
+                    <th className="px-5 py-3.5">Email Address</th>
+                    <th className="px-5 py-3.5">Contact Number</th>
+                    <th className="px-5 py-3.5">Role</th>
+                    <th className="px-5 py-3.5 text-center">Status</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-beige-dark/40 font-medium">
                   {chefs.map((chef) => (
-                    <tr key={chef.id} className="hover:bg-brand-beige-light/30 transition-colors">
-                      <td className="px-5 py-3.5 font-bold text-brand-green flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-brand-beige flex items-center justify-center text-sm border border-brand-gold shrink-0">
-                          👨‍🍳
+                    <tr
+                      key={chef.id}
+                      className="hover:bg-brand-beige-light/40 transition-colors"
+                    >
+                      {/* Name - Plain static text, non-clickable, no edit icon on hover */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-brand-beige flex items-center justify-center text-base border border-brand-gold shrink-0 shadow-2xs">
+                            👨‍🍳
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-sm text-brand-green block">
+                              {chef.name}
+                            </span>
+                            <span className="text-[10px] text-brand-green/50 block font-mono">
+                              ID: {chef.id.substring(0, 8)}...
+                            </span>
+                          </div>
                         </div>
-                        <span>{chef.name}</span>
                       </td>
-                      <td className="px-5 py-3.5 text-brand-green/80 font-mono">
-                        {chef.email}
+
+                      {/* Email */}
+                      <td className="px-5 py-4 text-brand-green/80 font-mono text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-brand-green/40 shrink-0" />
+                          <span>{chef.email}</span>
+                        </div>
                       </td>
-                      <td className="px-5 py-3.5 text-brand-green/80 font-mono">
-                        {chef.contactNumber || chef.contact_number || '—'}
+
+                      {/* Contact Number */}
+                      <td className="px-5 py-4 text-brand-green/80 font-mono text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-brand-green/40 shrink-0" />
+                          <span>{chef.contactNumber || chef.contact_number || '—'}</span>
+                        </div>
                       </td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-gold/20 text-brand-green border border-brand-gold/40">
-                          {chef.role}
+
+                      {/* Role */}
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] uppercase font-black tracking-wider border bg-brand-gold/20 text-brand-green border-brand-gold/40">
+                          <Shield className="w-3 h-3" />
+                          <span>{chef.role || 'CHEF'}</span>
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Active
-                        </span>
+
+                      {/* Status */}
+                      <td className="px-5 py-4 text-center">
+                        {chef.is_active !== false ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(chef)}
+                            className="p-1.5 rounded-lg hover:bg-brand-beige text-brand-green/60 hover:text-brand-green transition-colors cursor-pointer"
+                            title="Edit Chef Details"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChefToDelete(chef);
+                              setDeleteError(null);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors cursor-pointer"
+                            title="Delete Chef"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -217,127 +443,395 @@ export default function ChefManagementPage() {
         </div>
       </div>
 
-      {/* Add Chef Custom Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white rounded-3xl border border-brand-beige-dark shadow-2xl overflow-hidden p-6 space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-brand-beige-dark/50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-brand-beige text-brand-green flex items-center justify-center border border-brand-gold">
-                  <ChefHat className="w-4 h-4 text-brand-green" />
+      {/* ============================================================== */}
+      {/* ADD NEW CHEF MODAL */}
+      {/* ============================================================== */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-brand-beige-dark shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-brand-beige-dark flex items-center justify-between bg-brand-beige/30">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-brand-green rounded-xl text-white shadow-xs">
+                  <ChefHat className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-brand-green">Add Chef</h3>
-                  <p className="text-[11px] text-brand-green/60">Create a new kitchen staff account</p>
+                  <h3 className="font-black text-base text-brand-green">Add New Chef</h3>
+                  <p className="text-xs text-brand-green/60">Create credentials for kitchen staff</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={handleCloseModal}
-                disabled={isSubmitting}
-                className="w-8 h-8 rounded-full bg-brand-beige hover:bg-brand-beige-dark text-brand-green flex items-center justify-center transition-colors disabled:opacity-50"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-brand-beige text-brand-green/50 hover:text-brand-green transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {formError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                <span>{formError}</span>
+            {/* Error Message */}
+            {addError && (
+              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{addError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateChef} className="space-y-4 text-xs">
+            {/* Form */}
+            <form onSubmit={handleAddChef} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* Name */}
               <div className="space-y-1">
-                <label className="font-bold text-brand-green">Chef Name</label>
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Full Name</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sanjay Verma"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                  required
+                  placeholder="e.g. Ramesh Chef"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  disabled={isAdding}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
                 />
               </div>
 
+              {/* Email */}
               <div className="space-y-1">
-                <label className="font-bold text-brand-green">Email</label>
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Email Address</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="email"
+                  required
                   placeholder="chef@vaanvibes.in"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 font-mono"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  disabled={isAdding}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
                 />
               </div>
 
+              {/* Contact Number */}
               <div className="space-y-1">
-                <label className="font-bold text-brand-green">Contact Number</label>
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-brand-green flex items-center gap-1">
+                    <span>Contact Number</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
+                </div>
                 <input
                   type="tel"
-                  placeholder="+91 98765 43210"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 font-mono"
+                  required
+                  placeholder="e.g. 9876543210"
+                  value={addContact}
+                  onChange={(e) => setAddContact(e.target.value)}
+                  disabled={isAdding}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
                 />
               </div>
 
+              {/* Role Dropdown - strictly Chef */}
               <div className="space-y-1">
-                <label className="font-bold text-brand-green">Password</label>
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Role</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <select
+                  required
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value as UserRole)}
+                  disabled={isAdding}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-bold text-brand-green cursor-pointer"
+                >
+                  <option value="CHEF">CHEF (Kitchen Staff Access)</option>
+                </select>
+              </div>
+
+              {/* Password with strong validation */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-brand-green flex items-center gap-1">
+                    <span>Password</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <span className="text-[10px] text-brand-green/60 font-mono">Min. 6 chars</span>
+                </div>
                 <input
                   type="password"
-                  placeholder="Min. 6 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                  required
+                  placeholder="••••••••"
+                  value={addPassword}
+                  onChange={(e) => setAddPassword(e.target.value)}
+                  disabled={isAdding}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
                 />
-                <p className="text-[10px] text-brand-green/60">
-                  Password will not be displayed again after creation.
+                <p className="text-[10px] text-brand-green/60 leading-relaxed">
+                  Must contain uppercase, lowercase, number, and special character.
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-brand-green">Role</label>
-                <div className="w-full px-3.5 py-2.5 rounded-xl bg-brand-beige-light border border-brand-beige-dark text-brand-green font-bold flex items-center justify-between">
-                  <span>Chef</span>
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-brand-gold text-brand-green font-mono">
-                    Assigned by backend
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2.5">
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-beige-dark mt-2">
                 <button
                   type="button"
-                  onClick={handleCloseModal}
-                  disabled={isSubmitting}
-                  className="px-4 py-2.5 rounded-xl bg-brand-beige hover:bg-brand-beige-dark text-brand-green font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isAdding}
+                  className="px-4 py-2.5 rounded-xl border border-brand-beige-dark font-bold text-brand-green/70 hover:bg-brand-beige transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs flex items-center gap-2 shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  disabled={isAdding}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-white font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? (
+                  {isAdding ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-gold" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Creating...</span>
                     </>
                   ) : (
                     <>
-                      <Plus className="w-3.5 h-3.5 text-brand-gold" />
-                      <span>Add Chef</span>
+                      <Plus className="w-4 h-4" />
+                      <span>Create Chef</span>
                     </>
                   )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* EDIT CHEF MODAL (Directly opened on Edit button click) */}
+      {/* ============================================================== */}
+      {isEditModalOpen && editingChef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-brand-beige-dark shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-brand-beige-dark flex items-center justify-between bg-brand-beige/30">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-brand-gold/30 rounded-xl text-brand-green shadow-xs">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-brand-green">Edit Chef Details</h3>
+                  <p className="text-xs text-brand-green/60 font-mono">ID: {editingChef.id.substring(0, 12)}...</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingChef(null);
+                }}
+                className="p-1.5 rounded-xl hover:bg-brand-beige text-brand-green/50 hover:text-brand-green transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {editError && (
+              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSaveEditChef} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* Name */}
+              <div className="space-y-1">
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Full Name</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  disabled={isSavingEdit}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1">
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Email Address</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  disabled={isSavingEdit}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                />
+              </div>
+
+              {/* Contact Number */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-brand-green flex items-center gap-1">
+                    <span>Contact Number</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
+                </div>
+                <input
+                  type="tel"
+                  required
+                  placeholder="e.g. 9876543210"
+                  value={editContact}
+                  onChange={(e) => setEditContact(e.target.value)}
+                  disabled={isSavingEdit}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                />
+              </div>
+
+              {/* Role Dropdown - strictly Chef */}
+              <div className="space-y-1">
+                <label className="font-bold text-brand-green flex items-center gap-1">
+                  <span>Role</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <select
+                  required
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as UserRole)}
+                  disabled={isSavingEdit}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-bold text-brand-green cursor-pointer"
+                >
+                  <option value="CHEF">CHEF (Kitchen Staff Access)</option>
+                </select>
+              </div>
+
+              {/* Status Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-brand-beige-light/40 border border-brand-beige-dark">
+                <div>
+                  <span className="font-bold text-brand-green text-xs block">Account Status</span>
+                  <span className="text-[11px] text-brand-green/60">
+                    {editIsActive ? 'Active and allowed to log in' : 'Disabled from logging in'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditIsActive(!editIsActive)}
+                  disabled={isSavingEdit}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    editIsActive ? 'bg-brand-green' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      editIsActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-beige-dark mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingChef(null);
+                  }}
+                  disabled={isSavingEdit}
+                  className="px-4 py-2.5 rounded-xl border border-brand-beige-dark font-bold text-brand-green/70 hover:bg-brand-beige transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-white font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* DELETE CONFIRMATION MODAL */}
+      {/* ============================================================== */}
+      {chefToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl border border-brand-beige-dark shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-100 rounded-2xl text-red-600">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-brand-green">Delete Chef Account</h3>
+                <p className="text-xs text-brand-green/60">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-brand-green/80 leading-relaxed">
+              Are you sure you want to permanently remove{' '}
+              <span className="font-black text-brand-green">{chefToDelete.name}</span> (
+              <span className="font-mono">{chefToDelete.email}</span>)? They will immediately lose access to the
+              kitchen system.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setChefToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2.5 rounded-xl border border-brand-beige-dark font-bold text-xs text-brand-green/70 hover:bg-brand-beige transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteChef}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

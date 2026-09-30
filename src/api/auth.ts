@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { User } from '@/types/auth';
+import { User, UserRole } from '@/types/auth';
 
 export interface LoginResponse {
   access_token: string;
@@ -47,6 +47,9 @@ export const authApi = {
     email: string;
     contactNumber: string;
     password: string;
+    role?: UserRole;
+    shift?: string;
+    assignedStation?: string;
   }): Promise<User> => {
     const res = await apiClient<any>('/auth/chefs', {
       method: 'POST',
@@ -55,12 +58,53 @@ export const authApi = {
         email: data.email,
         contact_number: data.contactNumber,
         password: data.password,
+        role: data.role || 'CHEF',
+        shift: data.shift || 'Morning',
+        assigned_station: data.assignedStation || 'Main Kitchen',
       }),
     });
     return {
       ...res,
       contactNumber: res.contactNumber || res.contact_number,
     };
+  },
+
+  updateChef: async (
+    chefId: string,
+    data: {
+      name: string;
+      email: string;
+      contactNumber: string;
+      role: UserRole;
+      password?: string;
+      shift?: string;
+      assignedStation?: string;
+      isActive?: boolean;
+    }
+  ): Promise<User> => {
+    const res = await apiClient<any>(`/auth/chefs/${chefId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: data.name,
+        email: data.email,
+        contact_number: data.contactNumber,
+        role: data.role,
+        password: data.password && data.password.trim() ? data.password.trim() : undefined,
+        shift: data.shift,
+        assigned_station: data.assignedStation,
+        is_active: data.isActive,
+      }),
+    });
+    return {
+      ...res,
+      contactNumber: res.contactNumber || res.contact_number,
+    };
+  },
+
+  deleteChef: async (chefId: string): Promise<{ message: string; id: string }> => {
+    return apiClient<{ message: string; id: string }>(`/auth/chefs/${chefId}`, {
+      method: 'DELETE',
+    });
   },
 
   changePassword: async (data: {
