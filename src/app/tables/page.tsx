@@ -114,7 +114,19 @@ export default function TablesPage() {
 
   const handleCopyLink = async (table: TableInfo) => {
     const customerBase = envConfig.getCustomerFrontendUrl();
-    const url = table.qrCodeUrl || `${customerBase}/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
+    let url = table.qrCodeUrl || '';
+    if (!url || url.includes('localhost') || url.includes('127.0.0.1')) {
+      url = `${customerBase}/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
+    } else {
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+          url = `${customerBase}${parsed.pathname}${parsed.search}`;
+        }
+      } catch {
+        url = `${customerBase}/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
+      }
+    }
     try {
       if (typeof window !== 'undefined' && navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(url);

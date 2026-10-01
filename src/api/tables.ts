@@ -1,3 +1,4 @@
+import { envConfig } from '@/config/env';
 import { apiClient, API_BASE_URL } from './client';
 import { TableInfo, TableStatus } from '@/types/cafe';
 
@@ -30,7 +31,8 @@ export const tablesApi = {
   },
 
   getStandeeData: async (tableId: string): Promise<StandeeData> => {
-    return apiClient<StandeeData>(`/tables/${tableId}/standee`);
+    const frontendUrl = envConfig.getCustomerFrontendUrl();
+    return apiClient<StandeeData>(`/tables/${tableId}/standee?frontend_url=${encodeURIComponent(frontendUrl)}`);
   },
 
   deleteTable: async (tableId: string): Promise<{ message: string; id: string }> => {
@@ -40,6 +42,7 @@ export const tablesApi = {
   },
 
   getQrCodeUrl: (tableId: string): string => {
-    return `${API_BASE_URL}/tables/${tableId}/qr`;
+    const frontendUrl = envConfig.getCustomerFrontendUrl();
+    return `${API_BASE_URL}/tables/${tableId}/qr?frontend_url=${encodeURIComponent(frontendUrl)}`;
   },
 };
