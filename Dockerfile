@@ -24,9 +24,9 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:8000/api/v1/ws/orders
-ARG NEXT_PUBLIC_CUSTOMER_FRONTEND_URL=http://localhost:3000
+ARG NEXT_PUBLIC_API_URL=http://localhost:9000/api/v1
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:9000/api/v1/ws/orders
+ARG NEXT_PUBLIC_CUSTOMER_FRONTEND_URL=http://localhost:4000
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
@@ -35,14 +35,14 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
 RUN npm run build
 
 # ------------------------------------------------------------------------------
-# Stage 3: Minimal Production Runtime (Port 4000)
+# Stage 3: Minimal Production Runtime (Port 4001)
 # ------------------------------------------------------------------------------
 FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=4000 \
+    PORT=4001 \
     HOSTNAME="0.0.0.0"
 
 # Create non-root user for security hardening
@@ -56,9 +56,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 4000
+EXPOSE 4001
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:4000/api/health || exit 1
+    CMD wget -qO- http://localhost:4001/api/health || exit 1
 
 CMD ["node", "server.js"]

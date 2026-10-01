@@ -4,8 +4,8 @@
  */
 
 export const envConfig = {
-  // Application Port (defaults to production 4000)
-  port: parseInt(process.env.PORT || '4000', 10),
+  // Application Port (Production: 4001)
+  port: parseInt(process.env.PORT || '4001', 10),
 
   // Environment mode
   isProduction: process.env.NODE_ENV === 'production',
@@ -13,10 +13,11 @@ export const envConfig = {
 
   /**
    * Dynamically resolves the Backend REST API base URL.
+   * Backend runs on port 9000.
    * - Checks process.env.NEXT_PUBLIC_API_URL
    * - Prevents mixed-content errors by matching browser protocol (https vs http)
-   * - In browser, falls back dynamically to the current hostname on port 8000
-   * - In SSR, checks FASTAPI_BACKEND_URL or falls back to localhost:8000
+   * - In browser, falls back dynamically to current hostname on port 9000
+   * - In SSR, checks FASTAPI_BACKEND_URL or falls back to localhost:9000
    */
   getApiBaseUrl(): string {
     const envUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -32,7 +33,7 @@ export const envConfig = {
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol;
       const hostname = window.location.hostname;
-      return `${protocol}//${hostname}:8000/api/v1`;
+      return `${protocol}//${hostname}:9000/api/v1`;
     }
 
     const ssrBackend = process.env.FASTAPI_BACKEND_URL;
@@ -40,7 +41,7 @@ export const envConfig = {
       return ssrBackend.trim().replace(/\/+$/, '');
     }
 
-    return 'http://127.0.0.1:8000/api/v1';
+    return 'http://127.0.0.1:9000/api/v1';
   },
 
   /**
@@ -70,9 +71,9 @@ export const envConfig = {
     } else if (typeof window !== 'undefined') {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const hostname = window.location.hostname;
-      baseWsUrl = `${protocol}//${hostname}:8000/api/v1/ws/orders`;
+      baseWsUrl = `${protocol}//${hostname}:9000/api/v1/ws/orders`;
     } else {
-      baseWsUrl = 'ws://127.0.0.1:8000/api/v1/ws/orders';
+      baseWsUrl = 'ws://127.0.0.1:9000/api/v1/ws/orders';
     }
 
     // Attach token query param if not already present
@@ -86,7 +87,7 @@ export const envConfig = {
 
   /**
    * Resolves the customer-facing QR menu base URL for table QR links.
-   * Allows management users to generate and copy accurate customer ordering URLs.
+   * Customer frontend runs on port 4000.
    */
   getCustomerFrontendUrl(): string {
     const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_FRONTEND_URL;
@@ -94,8 +95,8 @@ export const envConfig = {
       return envUrl.trim().replace(/\/+$/, '');
     }
     if (typeof window !== 'undefined') {
-      return `${window.location.protocol}//${window.location.hostname}:3000`;
+      return `${window.location.protocol}//${window.location.hostname}:4000`;
     }
-    return 'http://localhost:3000';
+    return 'http://localhost:4000';
   },
 };

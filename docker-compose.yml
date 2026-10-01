@@ -4,22 +4,22 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000/api/v1/ws/orders}
-        NEXT_PUBLIC_CUSTOMER_FRONTEND_URL: ${NEXT_PUBLIC_CUSTOMER_FRONTEND_URL:-http://localhost:3000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:9000/api/v1}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:9000/api/v1/ws/orders}
+        NEXT_PUBLIC_CUSTOMER_FRONTEND_URL: ${NEXT_PUBLIC_CUSTOMER_FRONTEND_URL:-http://localhost:4000}
     container_name: van_vibes_management
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "4001:4001"
     environment:
       NODE_ENV: production
-      PORT: 4000
+      PORT: 4001
       HOSTNAME: "0.0.0.0"
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
-      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000/api/v1/ws/orders}
-      NEXT_PUBLIC_CUSTOMER_FRONTEND_URL: ${NEXT_PUBLIC_CUSTOMER_FRONTEND_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:9000/api/v1}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:9000/api/v1/ws/orders}
+      NEXT_PUBLIC_CUSTOMER_FRONTEND_URL: ${NEXT_PUBLIC_CUSTOMER_FRONTEND_URL:-http://localhost:4000}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/api/health"]
       interval: 15s
       timeout: 5s
       retries: 3
