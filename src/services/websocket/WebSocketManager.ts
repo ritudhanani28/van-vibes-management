@@ -1,3 +1,5 @@
+import { envConfig } from '@/config/env';
+
 export type WebSocketEventType =
   | 'ORDER_PLACED'
   | 'ORDER_ACCEPTED'
@@ -33,10 +35,7 @@ class WebSocketManagerService {
     }
 
     this.isExplicitDisconnect = false;
-    const wsToken = token || localStorage.getItem('vv_mgmt_token') || '';
-    const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `${wsProtocol}//${wsHost}:8000/api/v1/ws/orders?token=${encodeURIComponent(wsToken)}`;
+    const wsUrl = envConfig.getWebSocketUrl(token);
 
     try {
       this.socket = new WebSocket(wsUrl);

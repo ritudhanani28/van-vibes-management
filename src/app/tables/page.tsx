@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { tablesApi } from '@/api/tables';
 import { TableInfo } from '@/types/cafe';
 import { wsManager } from '@/services/websocket/WebSocketManager';
+import { envConfig } from '@/config/env';
 import {
   ExternalLink,
   Printer,
@@ -112,7 +113,8 @@ export default function TablesPage() {
   }, [fetchTables]);
 
   const handleCopyLink = async (table: TableInfo) => {
-    const url = table.qrCodeUrl || `http://localhost:3000/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
+    const customerBase = envConfig.getCustomerFrontendUrl();
+    const url = table.qrCodeUrl || `${customerBase}/cafe/van-vibes/menu?table=${table.id}&token=${table.token}`;
     try {
       if (typeof window !== 'undefined' && navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(url);
