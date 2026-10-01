@@ -34,7 +34,9 @@ class WebSocketManagerService {
 
     this.isExplicitDisconnect = false;
     const wsToken = token || localStorage.getItem('vv_mgmt_token') || '';
-    const wsUrl = `ws://127.0.0.1:8000/api/v1/ws/orders?token=${encodeURIComponent(wsToken)}`;
+    const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `${wsProtocol}//${wsHost}:8000/api/v1/ws/orders?token=${encodeURIComponent(wsToken)}`;
 
     try {
       this.socket = new WebSocket(wsUrl);
