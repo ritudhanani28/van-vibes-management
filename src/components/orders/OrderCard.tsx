@@ -343,19 +343,19 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
       )}
 
       {/* Bottom Action Footer */}
-      <div className="p-3.5 sm:p-4 border-t border-brand-beige-dark/60 bg-brand-beige-light/30 flex items-center justify-between gap-2 flex-wrap">
+      <div className="p-3 sm:p-3.5 border-t border-brand-beige-dark/60 bg-brand-beige-light/30 flex items-center justify-between gap-2 flex-wrap">
         {/* Financial info for Admin ONLY / Kitchen summary for Chef */}
         {!isChef ? (
-          <div>
-            <span className="text-[10px] uppercase font-bold text-brand-green/40 block">
+          <div className="shrink-0">
+            <span className="text-[10px] uppercase font-bold text-brand-green/40 block leading-tight">
               Total Due
             </span>
-            <span className="font-mono font-black text-base text-brand-green">
+            <span className="font-mono font-black text-sm sm:text-base text-brand-green leading-tight">
               ₹{(order.total ?? 0).toFixed(0)}
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 py-1">
+          <div className="flex items-center gap-1.5 py-1 shrink-0">
             <Utensils className="w-3.5 h-3.5 text-brand-green/50" />
             <span className="text-xs font-bold text-brand-green/80">
               {totalUnits} items to prepare
@@ -363,8 +363,8 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           </div>
         )}
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Action Controls - Anchored to the right, consistent button positioning */}
+        <div className="flex items-center justify-end gap-1.5 sm:gap-2 ml-auto flex-wrap">
           {/* Admin Cancel Button (Only if PLACED) */}
           {!isChef && (order.status === 'PLACED' || order.status === 'ORDER_PLACED') && (
             <>
@@ -407,13 +407,25 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
             </>
           )}
 
-          {/* Sequential Action Button: PLACED -> ACCEPTED -> SERVED -> COMPLETED */}
+          {/* Billing Action: Generate Bill (Positioned to the left of the primary action, so Complete Order stays fixed on the right) */}
+          {!isChef && (order.status === 'COMPLETED' || order.status === 'IN_KITCHEN' || order.status === 'SERVED') && onOpenBill && (
+            <button
+              type="button"
+              onClick={() => onOpenBill(order.id)}
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[40px] cursor-pointer whitespace-nowrap"
+            >
+              <Receipt className="w-4 h-4 text-brand-gold shrink-0" />
+              <span>{order.paymentStatus === 'PAID' ? 'View Bill' : 'Generate Bill'}</span>
+            </button>
+          )}
+
+          {/* Sequential Action Button: PLACED -> ACCEPTED -> SERVED -> COMPLETED (Fixed anchor on the far right) */}
           {nextAction && (
             <button
               type="button"
               disabled={isUpdating}
               onClick={handleExecuteAction}
-              className="px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 min-h-[44px] min-w-[130px] touch-manipulation cursor-pointer disabled:cursor-not-allowed"
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 min-h-[40px] touch-manipulation cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
             >
               {isUpdating ? (
                 <span>{nextAction.loadingLabel}</span>
@@ -423,18 +435,6 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
                   <span>{nextAction.label}</span>
                 </>
               )}
-            </button>
-          )}
-
-          {/* Billing Action ONLY when order is COMPLETED */}
-          {!isChef && (order.status === 'COMPLETED' || order.status === 'IN_KITCHEN' || order.status === 'SERVED') && onOpenBill && (
-            <button
-              type="button"
-              onClick={() => onOpenBill(order.id)}
-              className="px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[44px] cursor-pointer"
-            >
-              <Receipt className="w-4 h-4 text-brand-gold" />
-              <span>{order.paymentStatus === 'PAID' ? 'View Bill' : 'Generate Bill'}</span>
             </button>
           )}
         </div>
