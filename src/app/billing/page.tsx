@@ -86,8 +86,21 @@ export default function BillingPage() {
     .filter((inv) => inv.paymentStatus === 'PAID')
     .reduce((acc, curr) => acc + (curr.total || 0), 0);
 
-  // Active open or bill-generated sessions
-  const activeSessions = sessions.filter((s) => s.status !== 'CLOSED');
+  // Active open or bill-generated sessions that are NOT settled or completed with payment
+  const activeSessions = sessions.filter((s) => {
+    // Exclude if marked CLOSED, payment is PAID, or closedAt timestamp exists
+    if (s.status === 'CLOSED' || s.paymentStatus === 'PAID' || Boolean(s.closedAt)) {
+      return false;
+    }
+    // Exclude if this session has a settled PAID invoice in the ledger
+    const hasPaidInvoice = ledgerInvoices.some(
+      (inv) => inv.diningSessionId === s.id && inv.paymentStatus === 'PAID'
+    );
+    if (hasPaidInvoice) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <AppLayout requiredRole="ADMIN">

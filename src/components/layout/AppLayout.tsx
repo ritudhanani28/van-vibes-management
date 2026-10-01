@@ -62,7 +62,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   // Billing & Settlement (Admin Only)
   {
-    name: 'Billing & POS',
+    name: 'Billing',
     href: '/billing',
     icon: Receipt,
     roles: ['ADMIN'],

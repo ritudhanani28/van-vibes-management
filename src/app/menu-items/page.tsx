@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { MENU_CATEGORIES } from '@/data/vaan-vibes-menu';
 import { MenuCategory, MenuItem } from '@/types/cafe';
 import { menuApi } from '@/api/menu';
+import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   Search,
   Plus,
@@ -73,6 +74,42 @@ export default function MenuItemsAdminPage() {
     loadMenu();
   }, [loadMenu]);
 
+  useEffect(() => {
+    wsManager.connect();
+
+    const unsubAvail = wsManager.on('MENU_AVAILABILITY_CHANGED', (data: any) => {
+      const itemId = data?.itemId || data?.id;
+      const isAvailable = data?.isAvailable;
+      if (itemId !== undefined && isAvailable !== undefined) {
+        setItems((prev) =>
+          prev.map((item) => (item.id === itemId ? { ...item, isAvailable } : item))
+        );
+      }
+    });
+
+    const unsubUpdate = wsManager.on('MENU_ITEM_UPDATED', (data: any) => {
+      const updatedItem = data;
+      if (updatedItem?.id) {
+        setItems((prev) =>
+          prev.map((item) => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
+        );
+      }
+    });
+
+    const unsubDelete = wsManager.on('MENU_ITEM_DELETED', (data: any) => {
+      const itemId = data?.itemId || data?.id;
+      if (itemId) {
+        setItems((prev) => prev.filter((item) => item.id !== itemId));
+      }
+    });
+
+    return () => {
+      unsubAvail();
+      unsubUpdate();
+      unsubDelete();
+    };
+  }, []);
+
   // Close dropdown on click outside or escape key
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -109,49 +146,54 @@ export default function MenuItemsAdminPage() {
   const handleToggleAvailability = async (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    const nextState = !item.isAvailable;
+    const isCurrentlyAvailable = item.isAvailable !== false;
+    const nextState = !isCurrentlyAvailable;
     try {
       await menuApi.toggleAvailability(itemId, nextState);
-    } catch (err) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === itemId ? { ...i, isAvailable: nextState } : i))
+      );
+      triggerFeedback(
+        nextState
+          ? `"${item.name}" marked as available`
+          : `"${item.name}" marked as unavailable`
+      );
+    } catch (err: any) {
       console.error('Failed to toggle availability on backend:', err);
+      triggerFeedback(`Failed to update "${item.name}": ${err.message || 'Server error'}`);
     }
-    setItems((prev) =>
-      prev.map((i) => (i.id === itemId ? { ...i, isAvailable: nextState } : i))
-    );
-    triggerFeedback(
-      nextState
-        ? `"${item.name}" marked as available`
-        : `"${item.name}" marked as unavailable`
-    );
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
     const name = deletingItem.name;
+    const idToDelete = deletingItem.id;
     try {
-      await menuApi.deleteMenuItem(deletingItem.id);
-    } catch (err) {
+      await menuApi.deleteMenuItem(idToDelete);
+      setItems((prev) => prev.filter((i) => i.id !== idToDelete));
+      setDeletingItem(null);
+      triggerFeedback(`"${name}" removed from menu catalog`);
+    } catch (err: any) {
       console.error('Failed to delete menu item on backend:', err);
+      triggerFeedback(`Failed to delete "${name}": ${err.message || 'Server error'}`);
     }
-    setItems((prev) => prev.filter((i) => i.id !== deletingItem.id));
-    setDeletingItem(null);
-    triggerFeedback(`"${name}" removed from menu catalog`);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
-    try {
-      await menuApi.updateMenuItem(editingItem.id, editingItem);
-    } catch (err) {
-      console.error('Failed to update dish on backend:', err);
-    }
-    setItems((prev) =>
-      prev.map((i) => (i.id === editingItem.id ? { ...editingItem } : i))
-    );
     const name = editingItem.name;
-    setEditingItem(null);
-    triggerFeedback(`"${name}" updated successfully`);
+    try {
+      const updated = await menuApi.updateMenuItem(editingItem.id, editingItem);
+      setItems((prev) =>
+        prev.map((i) => (i.id === editingItem.id ? { ...i, ...updated, ...editingItem } : i))
+      );
+      setEditingItem(null);
+      triggerFeedback(`"${name}" updated successfully`);
+    } catch (err: any) {
+      console.error('Failed to update dish on backend:', err);
+      triggerFeedback(`Failed to update "${name}": ${err.message || 'Server error'}`);
+    }
   };
 
   const handleCreateItem = async (e: React.FormEvent) => {
@@ -559,16 +601,35 @@ export default function MenuItemsAdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-brand-green/80 uppercase">Price (₹)</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={editingItem.price}
-                  onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green font-mono focus:ring-2 focus:ring-brand-green focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category</label>
+                  <select
+                    value={editingItem.category}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:ring-2 focus:ring-brand-green focus:outline-none"
+                  >
+                    {categories
+                      .filter((c) => c.id !== "all")
+                      .map((c) => (
+                        <option key={c.id} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Price (₹)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editingItem.price}
+                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
+                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green font-mono focus:ring-2 focus:ring-brand-green focus:outline-none"
+                  />
+                </div>
               </div>
 
 
