@@ -115,6 +115,7 @@ export default function ChefKDSPage() {
     const unsubServed = wsManager.on('ORDER_SERVED', handleStatusTransition);
     const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleStatusTransition);
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
+    const unsubTransferred = wsManager.on('TABLE_TRANSFERRED', () => loadOrders());
 
     const interval = setInterval(loadOrders, 10000);
     return () => {
@@ -124,6 +125,7 @@ export default function ChefKDSPage() {
       unsubServed();
       unsubCompleted();
       unsubUpdated();
+      unsubTransferred();
     };
   }, [loadOrders, playKitchenChime]);
 

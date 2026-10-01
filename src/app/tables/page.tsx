@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { tablesApi } from '@/api/tables';
 import { TableInfo } from '@/types/cafe';
+import { CustomSelect } from '@/components/common/CustomSelect';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import { envConfig } from '@/config/env';
 import {
@@ -15,12 +16,24 @@ import {
   AlertCircle,
   MoreVertical,
   Trash2,
+  ArrowRightLeft,
+  CheckCircle2,
+  ChevronDown,
+  Users,
 } from 'lucide-react';
 
 export default function TablesPage() {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Swipe Table Modal State
+  const [isSwipeModalOpen, setIsSwipeModalOpen] = useState(false);
+  const [sourceTableId, setSourceTableId] = useState<string>('');
+  const [destTableId, setDestTableId] = useState<string>('');
+  const [isSwipingTable, setIsSwipingTable] = useState(false);
+  const [swipeError, setSwipeError] = useState<string | null>(null);
+  const [swipeSuccessMsg, setSwipeSuccessMsg] = useState<string | null>(null);
 
   // Add Table Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -33,6 +46,25 @@ export default function TablesPage() {
   const [tableToDelete, setTableToDelete] = useState<TableInfo | null>(null);
   const [isDeletingTable, setIsDeletingTable] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [updatingTableId, setUpdatingTableId] = useState<string | null>(null);
+
+  const handleToggleStatus = async (table: TableInfo) => {
+    const nextStatus = table.status === 'OCCUPIED' ? 'AVAILABLE' : 'OCCUPIED';
+    setOpenMenuTableId(null);
+    try {
+      setUpdatingTableId(table.id);
+      setTables((prev) =>
+        prev.map((t) => (t.id === table.id ? { ...t, status: nextStatus } : t))
+      );
+      await tablesApi.updateStatus(table.id, nextStatus);
+      await fetchTables();
+    } catch (err: any) {
+      console.error('Failed to update table status:', err);
+      await fetchTables();
+    } finally {
+      setUpdatingTableId(null);
+    }
+  };
 
   // Close 3-dots menu on click outside or escape key
   useEffect(() => {
@@ -102,6 +134,7 @@ export default function TablesPage() {
     const unsubClosed = wsManager.on('DINING_SESSION_CLOSED', handleSessionUpdate);
     const unsubTableCreated = wsManager.on('TABLE_CREATED', handleSessionUpdate);
     const unsubTableDeleted = wsManager.on('TABLE_DELETED', handleSessionUpdate);
+    const unsubTransferred = wsManager.on('TABLE_TRANSFERRED', handleSessionUpdate);
 
     return () => {
       unsubStatus();
@@ -109,6 +142,7 @@ export default function TablesPage() {
       unsubClosed();
       unsubTableCreated();
       unsubTableDeleted();
+      unsubTransferred();
     };
   }, [fetchTables]);
 
@@ -146,6 +180,95 @@ export default function TablesPage() {
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       console.error('Failed to copy link:', err);
+    }
+  };
+
+  const handleOpenSwipeModal = () => {
+    setSwipeError(null);
+    const availableSources = tables.filter(
+      (t) => t.status === 'OCCUPIED' && t.activeSession && t.activeSession.status === 'OPEN'
+    );
+    const firstSource = availableSources[0]?.id || '';
+    setSourceTableId(firstSource);
+
+    const availableDests = tables.filter(
+      (t) => t.status === 'AVAILABLE' && t.id !== firstSource
+    );
+    setDestTableId(availableDests[0]?.id || '');
+    setIsSwipeModalOpen(true);
+  };
+
+  const handleSourceChange = (newSourceId: string) => {
+    setSourceTableId(newSourceId);
+    setSwipeError(null);
+    if (destTableId === newSourceId) {
+      const nextDest = tables.find(
+        (t) => t.status === 'AVAILABLE' && t.id !== newSourceId
+      )?.id || '';
+      setDestTableId(nextDest);
+    }
+  };
+
+  const handleExecuteSwipe = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!sourceTableId || !destTableId) {
+      setSwipeError('Please select both a source table and a destination table.');
+      return;
+    }
+    if (sourceTableId === destTableId) {
+      setSwipeError('Source and destination table cannot be the same.');
+      return;
+    }
+
+    const srcTbl = tables.find((t) => t.id === sourceTableId);
+    const dstTbl = tables.find((t) => t.id === destTableId);
+
+    if (!srcTbl || srcTbl.status !== 'OCCUPIED' || !srcTbl.activeSession) {
+      setSwipeError(`Source Table ${srcTbl?.tableNumber || ''} has no active dining session.`);
+      return;
+    }
+
+    if (!dstTbl || dstTbl.status !== 'AVAILABLE') {
+      setSwipeError(`Destination Table ${dstTbl?.tableNumber || ''} is not available.`);
+      return;
+    }
+
+    setIsSwipingTable(true);
+    setSwipeError(null);
+
+    try {
+      const res = await tablesApi.swipeTable(sourceTableId, destTableId);
+
+      // Optimistically update tables state immediately
+      setTables((prev) =>
+        prev.map((t) => {
+          if (t.id === sourceTableId) {
+            return { ...t, status: 'AVAILABLE', activeSession: undefined };
+          }
+          if (t.id === destTableId) {
+            return {
+              ...t,
+              status: 'OCCUPIED',
+              activeSession: res.destinationTable?.activeSession || srcTbl.activeSession,
+            };
+          }
+          return t;
+        })
+      );
+
+      setIsSwipeModalOpen(false);
+      setSwipeSuccessMsg(
+        `Table ${srcTbl.tableNumber.toString().padStart(2, '0')} successfully transferred to Table ${dstTbl.tableNumber.toString().padStart(2, '0')}!`
+      );
+      setTimeout(() => setSwipeSuccessMsg(null), 4000);
+
+      // Re-sync with backend
+      fetchTables();
+    } catch (err: any) {
+      console.error('Failed to swipe table:', err);
+      setSwipeError(err?.message || 'Failed to transfer table. Please try again.');
+    } finally {
+      setIsSwipingTable(false);
     }
   };
 
@@ -192,19 +315,46 @@ export default function TablesPage() {
             </p>
           </div>
 
-          {/* Add Table Action Button (Replaces Refresh) */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsAddModalOpen(true);
-              setAddTableError(null);
-              setNewTableNumber('');
-            }}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
-          >
-            <span>+ Add Table</span>
-          </button>
+          {/* Action Buttons: Add Table & Swipe Table */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddModalOpen(true);
+                setAddTableError(null);
+                setNewTableNumber('');
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+            >
+              <span>+ Add Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenSwipeModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white hover:bg-brand-beige text-brand-green border border-brand-beige-dark text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Swipe Table</span>
+            </button>
+          </div>
         </div>
+
+        {/* Success Feedback Alert */}
+        {swipeSuccessMsg && (
+          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between shadow-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{swipeSuccessMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSwipeSuccessMsg(null)}
+              className="text-emerald-700 hover:text-emerald-900 p-1 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Tables Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -260,9 +410,32 @@ export default function TablesPage() {
 
                     {openMenuTableId === table.id && (
                       <div
-                        className="absolute right-0 top-9 w-40 bg-white rounded-xl shadow-xl border border-brand-beige-dark p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                        className="absolute right-0 top-9 w-44 bg-white rounded-xl shadow-xl border border-brand-beige-dark p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
                         onClick={(e) => e.stopPropagation()}
                       >
+                        {/* Toggle Status: Available <-> Occupied */}
+                        <button
+                          type="button"
+                          disabled={updatingTableId === table.id}
+                          onClick={() => handleToggleStatus(table)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors text-left cursor-pointer group disabled:opacity-50 ${table.status === "OCCUPIED" ? "text-emerald-700 hover:bg-emerald-50" : "text-amber-700 hover:bg-amber-50"}`}
+                        >
+                          {table.status === 'OCCUPIED' ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+                              <span>Set to Available</span>
+                            </>
+                          ) : (
+                            <>
+                              <Users className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform shrink-0" />
+                              <span>Set to Occupied</span>
+                            </>
+                          )}
+                        </button>
+
+                        <div className="my-1 border-t border-brand-beige-dark/50" />
+
+                        {/* Delete Table Option */}
                         <button
                           type="button"
                           onClick={() => {
@@ -272,7 +445,7 @@ export default function TablesPage() {
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-colors text-left cursor-pointer group"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+                          <Trash2 className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform shrink-0" />
                           <span>Delete Table</span>
                         </button>
                       </div>
@@ -514,6 +687,164 @@ export default function TablesPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Swipe Table Custom Modal */}
+      {isSwipeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full space-y-4 shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-brand-gold/15 text-brand-green flex items-center justify-center border border-brand-gold/30">
+                  <ArrowRightLeft className="w-4 h-4 text-brand-gold" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-brand-green">Transfer Customer</h3>
+                  <p className="text-[11px] text-brand-green/60">Swipe active dining session to another table</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isSwipingTable) setIsSwipeModalOpen(false);
+                }}
+                className="text-brand-green/60 hover:text-brand-green p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {swipeError && (
+              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{swipeError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleExecuteSwipe} className="space-y-4">
+              {/* Source Table Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-brand-green block">
+                  From Table (Source)
+                </label>
+                {(() => {
+                  const sources = tables.filter(
+                    (t) => t.status === 'OCCUPIED' && t.activeSession && t.activeSession.status === 'OPEN'
+                  );
+                  if (sources.length === 0) {
+                    return (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                        No occupied tables with active dining sessions currently available to transfer.
+                      </div>
+                    );
+                  }
+                  return (
+                    <CustomSelect
+                      value={sourceTableId}
+                      onChange={(val) => handleSourceChange(val)}
+                      placeholder="Select active source table..."
+                      options={sources.map((t) => {
+                        const count = t.activeSession?.orderCount;
+                        const total = t.activeSession?.totalAmount;
+                        const details = count ? ` (${count} orders • ₹${total?.toFixed(0)})` : ' (Occupied)';
+                        return {
+                          value: t.id,
+                          label: `Table ${t.tableNumber.toString().padStart(2, '0')}${details}`,
+                        };
+                      })}
+                    />
+                  );
+                })()}
+              </div>
+
+              {/* Arrow Indicator */}
+              <div className="flex items-center justify-center">
+                <div className="w-7 h-7 rounded-full bg-brand-beige-light border border-brand-beige-dark flex items-center justify-center text-brand-green">
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-brand-gold" />
+                </div>
+              </div>
+
+              {/* Destination Table Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-brand-green block">
+                  To Table (Destination)
+                </label>
+                {(() => {
+                  const dests = tables.filter(
+                    (t) => t.status === 'AVAILABLE' && t.id !== sourceTableId
+                  );
+                  if (dests.length === 0) {
+                    return (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                        No available tables found to transfer the customer to.
+                      </div>
+                    );
+                  }
+                  return (
+                    <CustomSelect
+                      value={destTableId}
+                      onChange={(val) => {
+                        setDestTableId(val);
+                        setSwipeError(null);
+                      }}
+                      placeholder="Select available destination table..."
+                      options={dests.map((t) => ({
+                        value: t.id,
+                        label: `Table ${t.tableNumber.toString().padStart(2, '0')} — Available (Capacity: ${t.capacity})`,
+                      }))}
+                    />
+                  );
+                })()}
+              </div>
+
+              {/* Confirmation Details Card (Section 17) */}
+              {(() => {
+                const sTbl = tables.find((t) => t.id === sourceTableId);
+                const dTbl = tables.find((t) => t.id === destTableId);
+                if (!sTbl || !dTbl) return null;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-brand-beige-light/70 border border-brand-beige-dark/60 space-y-1 animate-in fade-in duration-150">
+                    <p className="text-xs font-extrabold text-brand-green">
+                      Move customer from Table {sTbl.tableNumber.toString().padStart(2, '0')} to Table {dTbl.tableNumber.toString().padStart(2, '0')}?
+                    </p>
+                    <p className="text-[11px] text-brand-green/75 leading-relaxed">
+                      The active dining session and its existing orders will be moved to Table {dTbl.tableNumber.toString().padStart(2, '0')}. Table {sTbl.tableNumber.toString().padStart(2, '0')} will become Available.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-beige-dark/60">
+                <button
+                  type="button"
+                  disabled={isSwipingTable}
+                  onClick={() => setIsSwipeModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-brand-beige hover:bg-brand-beige-dark text-brand-green text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSwipingTable || !sourceTableId || !destTableId}
+                  className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-black shadow-xs transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {isSwipingTable ? (
+                    <>
+                      <div className="w-3 h-3 rounded-full border-2 border-brand-gold border-t-transparent animate-spin" />
+                      <span>Swiping Table...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-brand-gold" />
+                      <span>Swipe Table</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

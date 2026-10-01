@@ -3,9 +3,12 @@
 import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Store, Clock, Save, Check } from 'lucide-react';
+import { CustomSelect } from '@/components/common/CustomSelect';
 
 export default function CafeSettingsPage() {
   const [saved, setSaved] = useState(false);
+  const [kdsInterval, setKdsInterval] = useState('5');
+  const [alertSound, setAlertSound] = useState('chime');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,20 +65,28 @@ export default function CafeSettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
                 <label className="font-bold text-brand-green">KDS Auto-Refresh Interval</label>
-                <select className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs bg-white">
-                  <option value="5">Every 5 seconds</option>
-                  <option value="10">Every 10 seconds</option>
-                  <option value="15">Every 15 seconds</option>
-                </select>
+                <CustomSelect
+                  value={kdsInterval}
+                  onChange={setKdsInterval}
+                  options={[
+                    { value: '5', label: 'Every 5 seconds' },
+                    { value: '10', label: 'Every 10 seconds' },
+                    { value: '15', label: 'Every 15 seconds' },
+                  ]}
+                />
               </div>
 
               <div className="space-y-1">
                 <label className="font-bold text-brand-green">Order Alert Sound</label>
-                <select className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark text-xs bg-white">
-                  <option value="chime">Subtle Dining Chime (Default)</option>
-                  <option value="bell">Kitchen Bell</option>
-                  <option value="silent">Silent</option>
-                </select>
+                <CustomSelect
+                  value={alertSound}
+                  onChange={setAlertSound}
+                  options={[
+                    { value: 'chime', label: 'Subtle Dining Chime (Default)' },
+                    { value: 'bell', label: 'Kitchen Bell' },
+                    { value: 'silent', label: 'Silent' },
+                  ]}
+                />
               </div>
             </div>
           </div>

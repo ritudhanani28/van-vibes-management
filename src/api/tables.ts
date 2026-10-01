@@ -45,4 +45,20 @@ export const tablesApi = {
     const frontendUrl = envConfig.getCustomerFrontendUrl();
     return `${API_BASE_URL}/tables/${tableId}/qr?frontend_url=${encodeURIComponent(frontendUrl)}`;
   },
+
+  swipeTable: async (
+    sourceTableId: string,
+    destinationTableId: string
+  ): Promise<{
+    message: string;
+    sessionId: string;
+    sourceTable: TableInfo;
+    destinationTable: TableInfo;
+    orderIds: string[];
+  }> => {
+    return apiClient('/tables/swipe', {
+      method: 'POST',
+      body: JSON.stringify({ sourceTableId, destinationTableId }),
+    });
+  },
 };

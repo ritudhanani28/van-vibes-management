@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { BillModal } from '@/components/billing/BillModal';
+import { CustomSelect } from '@/components/common/CustomSelect';
 import { Order, OrderStatus, TableInfo } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { tablesApi } from '@/api/tables';
@@ -183,22 +184,18 @@ export default function AdminDashboardPage() {
 
           {/* Date Filter Dropdown */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-brand-beige/40 border border-brand-beige-dark text-xs font-bold text-brand-green shadow-2xs transition-all">
-              <Calendar className="w-3.5 h-3.5 text-brand-green/60 shrink-0" />
-              <span className="text-[11px] text-brand-green/60 font-semibold hidden xs:inline">Date Range:</span>
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value as DateRangeOption)}
-                className="bg-transparent text-xs font-bold text-brand-green focus:outline-none cursor-pointer pr-1"
-                aria-label="Select Date Range"
-              >
-                {DATE_RANGE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <CustomSelect
+              value={dateRange}
+              onChange={(val) => setDateRange(val as DateRangeOption)}
+              options={DATE_RANGE_OPTIONS.map((opt) => ({
+                value: opt.value,
+                label: opt.label,
+              }))}
+              icon={<Calendar className="w-3.5 h-3.5 text-brand-green/60 shrink-0" />}
+              className="w-44"
+              buttonClassName="py-2 px-3 shadow-2xs"
+              ariaLabel="Select Date Range"
+            />
           </div>
         </div>
 

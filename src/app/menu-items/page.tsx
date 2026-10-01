@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MENU_CATEGORIES } from '@/data/vaan-vibes-menu';
 import { MenuCategory, MenuItem } from '@/types/cafe';
 import { menuApi } from '@/api/menu';
+import { CustomSelect } from '@/components/common/CustomSelect';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   Search,
@@ -20,6 +21,24 @@ import {
   ChevronDown,
   Check,
 } from 'lucide-react';
+
+const sortMenuItemsAlphabetically = (menuItems: MenuItem[]): MenuItem[] => {
+  const seen = new Set<string>();
+  const uniqueItems: MenuItem[] = [];
+  for (const item of menuItems) {
+    if (item && item.id) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        uniqueItems.push(item);
+      }
+    } else if (item) {
+      uniqueItems.push(item);
+    }
+  }
+  return uniqueItems.sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base', numeric: true })
+  );
+};
 
 export default function MenuItemsAdminPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -63,7 +82,7 @@ export default function MenuItemsAdminPage() {
         ]);
       }
       if (dishItems && dishItems.length > 0) {
-        setItems(dishItems);
+        setItems(sortMenuItemsAlphabetically(dishItems));
       }
     } catch (err) {
       console.error('Failed to load menu items:', err);
@@ -90,9 +109,13 @@ export default function MenuItemsAdminPage() {
     const unsubUpdate = wsManager.on('MENU_ITEM_UPDATED', (data: any) => {
       const updatedItem = data;
       if (updatedItem?.id) {
-        setItems((prev) =>
-          prev.map((item) => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
-        );
+        setItems((prev) => {
+          const exists = prev.some((item) => item.id === updatedItem.id);
+          const next = exists
+            ? prev.map((item) => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
+            : [...prev, updatedItem];
+          return sortMenuItemsAlphabetically(next);
+        });
       }
     });
 
@@ -185,8 +208,11 @@ export default function MenuItemsAdminPage() {
     const name = editingItem.name;
     try {
       const updated = await menuApi.updateMenuItem(editingItem.id, editingItem);
+      const mergedItem = { ...editingItem, ...(updated || {}) };
       setItems((prev) =>
-        prev.map((i) => (i.id === editingItem.id ? { ...i, ...updated, ...editingItem } : i))
+        sortMenuItemsAlphabetically(
+          prev.map((i) => (i.id === editingItem.id ? { ...i, ...mergedItem } : i))
+        )
       );
       setEditingItem(null);
       triggerFeedback(`"${name}" updated successfully`);
@@ -211,7 +237,10 @@ export default function MenuItemsAdminPage() {
         isAvailable: true,
       });
 
-      setItems((prev) => [created, ...prev]);
+      setItems((prev) => {
+        const withoutCreated = prev.filter((i) => i.id !== created.id);
+        return sortMenuItemsAlphabetically([...withoutCreated, created]);
+      });
       triggerFeedback(`"${created.name}" added to menu catalog`);
     } catch (err: any) {
       // Local fallback
@@ -225,7 +254,10 @@ export default function MenuItemsAdminPage() {
         popular: newItemForm.popular,
         isAvailable: true,
       };
-      setItems((prev) => [newItem, ...prev]);
+      setItems((prev) => {
+        const withoutNew = prev.filter((i) => i.id !== newItem.id);
+        return sortMenuItemsAlphabetically([...withoutNew, newItem]);
+      });
       triggerFeedback(`"${newItem.name}" added to menu catalog`);
     }
 
@@ -240,12 +272,15 @@ export default function MenuItemsAdminPage() {
     });
   };
 
-  const filteredItems = items.filter((item) => {
-    if (selectedCategory !== "all" && item.category !== selectedCategory) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return item.name.toLowerCase().includes(q);
-  });
+  const filteredItems = useMemo(() => {
+    const matched = items.filter((item) => {
+      if (selectedCategory !== "all" && item.category !== selectedCategory) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (item.name || '').toLowerCase().includes(q);
+    });
+    return sortMenuItemsAlphabetically(matched);
+  }, [items, selectedCategory, searchQuery]);
 
   const currentCategory = categories.find((c) => c.slug === selectedCategory);
   const selectedCategoryCount =
@@ -604,19 +639,18 @@ export default function MenuItemsAdminPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category</label>
-                  <select
+                  <CustomSelect
                     value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:ring-2 focus:ring-brand-green focus:outline-none"
-                  >
-                    {categories
+                    onChange={(val) => setEditingItem({ ...editingItem, category: val })}
+                    placeholder="Select category..."
+                    className="mt-1"
+                    options={categories
                       .filter((c) => c.id !== "all")
-                      .map((c) => (
-                        <option key={c.id} value={c.slug}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
+                      .map((c) => ({
+                        value: c.slug,
+                        label: `${c.icon ? c.icon + ' ' : ''}${c.name}`,
+                      }))}
+                  />
                 </div>
 
                 <div>
@@ -750,19 +784,18 @@ export default function MenuItemsAdminPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category *</label>
-                  <select
+                  <CustomSelect
                     value={newItemForm.category}
-                    onChange={(e) => setNewItemForm({ ...newItemForm, category: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green bg-white focus:ring-2 focus:ring-brand-green focus:outline-none"
-                  >
-                    {categories
+                    onChange={(val) => setNewItemForm({ ...newItemForm, category: val })}
+                    placeholder="Select category..."
+                    className="mt-1"
+                    options={categories
                       .filter((c) => c.id !== "all")
-                      .map((c) => (
-                        <option key={c.id} value={c.slug}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
+                      .map((c) => ({
+                        value: c.slug,
+                        label: `${c.icon ? c.icon + ' ' : ''}${c.name}`,
+                      }))}
+                  />
                 </div>
 
                 <div>

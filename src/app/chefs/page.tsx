@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { authApi } from '@/api/auth';
 import { User, UserRole } from '@/types/auth';
+import { CustomSelect } from '@/components/common/CustomSelect';
 import {
   ChefHat,
   Plus,
@@ -539,15 +540,14 @@ export default function ChefManagementPage() {
                   <span>Role</span>
                   <span className="text-red-500 font-bold">*</span>
                 </label>
-                <select
-                  required
+                <CustomSelect
                   value={addRole}
-                  onChange={(e) => setAddRole(e.target.value as UserRole)}
+                  onChange={(val) => setAddRole(val as UserRole)}
                   disabled={isAdding}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-bold text-brand-green cursor-pointer"
-                >
-                  <option value="CHEF">CHEF (Kitchen Staff Access)</option>
-                </select>
+                  options={[
+                    { value: 'CHEF', label: 'CHEF (Kitchen Staff Access)' },
+                  ]}
+                />
               </div>
 
               {/* Password with strong validation */}
@@ -703,15 +703,14 @@ export default function ChefManagementPage() {
                   <span>Role</span>
                   <span className="text-red-500 font-bold">*</span>
                 </label>
-                <select
-                  required
+                <CustomSelect
                   value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as UserRole)}
+                  onChange={(val) => setEditRole(val as UserRole)}
                   disabled={isSavingEdit}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-bold text-brand-green cursor-pointer"
-                >
-                  <option value="CHEF">CHEF (Kitchen Staff Access)</option>
-                </select>
+                  options={[
+                    { value: 'CHEF', label: 'CHEF (Kitchen Staff Access)' },
+                  ]}
+                />
               </div>
 
               {/* Status Toggle */}

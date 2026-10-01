@@ -188,7 +188,119 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   };
 
   const handlePrint = () => {
-    window.print();
+    const receiptElement = document.getElementById('printable-receipt');
+    if (!receiptElement) {
+      window.print();
+      return;
+    }
+
+    // Remove any previously created print iframe if exists
+    const existingFrame = document.getElementById('print-receipt-frame');
+    if (existingFrame && existingFrame.parentNode) {
+      existingFrame.parentNode.removeChild(existingFrame);
+    }
+
+    // Create an invisible iframe for isolated single-page receipt printing
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-receipt-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.opacity = '0.01';
+    iframe.style.border = 'none';
+    iframe.style.pointerEvents = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    // Collect all stylesheets and style tags from current page
+    let stylesHtml = '';
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+      stylesHtml += node.outerHTML;
+    });
+
+    const billTitle = bill?.billNumber ? `Bill-${bill.billNumber}` : 'Cafe-Bill';
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>${billTitle}</title>
+          ${stylesHtml}
+          <style>
+            @page {
+              size: auto;
+              margin: 8mm 12mm;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #18312B !important;
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              height: auto !important;
+              min-height: 0 !important;
+              overflow: visible !important;
+            }
+            body * {
+              visibility: visible !important;
+            }
+            .no-print, .no-print * {
+              display: none !important;
+              visibility: hidden !important;
+            }
+            #printable-receipt {
+              width: 100% !important;
+              max-width: 580px !important;
+              margin: 0 auto !important;
+              padding: 16px !important;
+              background: #ffffff !important;
+              box-shadow: none !important;
+              border: none !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              overflow: visible !important;
+              height: auto !important;
+              max-height: none !important;
+            }
+          </style>
+        </head>
+        <body class="bg-white">
+          <div id="printable-receipt" class="p-6 space-y-5 bg-white">
+            ${receiptElement.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Give iframe time to parse styles and render before triggering print
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error('Print iframe error:', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 250);
   };
 
   const handleSettle = async (method: string) => {
@@ -281,57 +393,33 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
           {bill && !loading && (
             <>
               {/* Session / Table Status Banner (NO-PRINT) */}
-              <div className="no-print space-y-2">
-                {isSessionOpen && (
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
-                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                          <span>Dining Session is OPEN • Table is OCCUPIED</span>
-                        </div>
-                        <p className="text-[11px] text-amber-800/80 mt-0.5 leading-snug">
-                          Click below to generate the final bill. The physical table will immediately become <strong>AVAILABLE</strong> for new guests while payment remains pending.
-                        </p>
-                      </div>
+              {(isBillGenerated || isPaid) && (
+                <div className="no-print space-y-2">
+                  {isBillGenerated && !isPaid && (
+                    <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 flex items-center justify-between text-xs font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-purple-600" />
+                        <span>Final Bill Generated • Table is AVAILABLE</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] uppercase font-mono">
+                        Payment Pending
+                      </span>
                     </div>
+                  )}
 
-                    <button
-                      type="button"
-                      disabled={isGeneratingFinalBill}
-                      onClick={() => setShowConfirmModal(true)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-                      <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill'}</span>
-                    </button>
-                  </div>
-                )}
-
-                {isBillGenerated && !isPaid && (
-                  <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-purple-600" />
-                      <span>Final Bill Generated • Table is AVAILABLE</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] uppercase font-mono">
-                      Payment Pending
-                    </span>
-                  </div>
-                )}
-
-                {isPaid && (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>Payment Settled & Session Closed</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] uppercase font-mono">
-                      PAID
-                    </span>
-                  </div>
-                )}
-              </div>
+                  {isPaid && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-xs font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Payment Settled & Session Closed</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] uppercase font-mono">
+                        PAID
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Receipt Header */}
               <div className="text-center space-y-1 pb-4 border-b border-dashed border-brand-beige-dark">
@@ -609,6 +697,35 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <span className="font-mono text-brand-green-deep">₹{bill.total.toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Generate Final Bill Action at bottom of the bill when session is open */}
+              {isSessionOpen && (
+                <div className="no-print pt-2">
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                          <span>Dining Session is OPEN • Table is OCCUPIED</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800/80 mt-0.5 leading-snug">
+                          Click below to generate the final bill. The physical table will immediately become <strong>AVAILABLE</strong> for new guests while payment remains pending.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isGeneratingFinalBill}
+                      onClick={() => setShowConfirmModal(true)}
+                      className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+                      <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Settle Action in Modal ONLY after Bill is Generated */}
               {isBillGenerated && !isPaid && (
