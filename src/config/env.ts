@@ -14,25 +14,32 @@ export const envConfig = {
   /**
    * Dynamically resolves the Backend REST API base URL.
    * Backend runs on port 9000.
-   * - Checks process.env.NEXT_PUBLIC_API_URL
+   * - In browser, automatically matches current server hostname (e.g. 84.247.143.242)
+   * - Ignores build-time "localhost" when loaded from a remote host
    * - Prevents mixed-content errors by matching browser protocol (https vs http)
-   * - In browser, falls back dynamically to current hostname on port 9000
    * - In SSR, checks FASTAPI_BACKEND_URL or falls back to localhost:9000
    */
   getApiBaseUrl(): string {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (envUrl && envUrl.trim()) {
-      let resolved = envUrl.trim();
-      // Upgrade http:// to https:// if the portal is loaded over https:// to prevent mixed-content errors
-      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && resolved.startsWith('http://')) {
-        resolved = resolved.replace(/^http:\/\//, 'https://');
-      }
-      return resolved.replace(/\/+$/, '');
-    }
-
     if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol;
       const hostname = window.location.hostname;
+      const protocol = window.location.protocol;
+      const envUrl = process.env.NEXT_PUBLIC_API_URL;
+
+      // If an explicit remote/production URL was configured (not localhost/127.0.0.1), use it:
+      if (
+        envUrl &&
+        envUrl.trim() &&
+        !envUrl.includes('localhost') &&
+        !envUrl.includes('127.0.0.1')
+      ) {
+        let resolved = envUrl.trim();
+        if (protocol === 'https:' && resolved.startsWith('http://')) {
+          resolved = resolved.replace(/^http:\/\//, 'https://');
+        }
+        return resolved.replace(/\/+$/, '');
+      }
+
+      // Dynamically match the current browser host on port 9000
       return `${protocol}//${hostname}:9000/api/v1`;
     }
 
@@ -46,8 +53,8 @@ export const envConfig = {
 
   /**
    * Dynamically resolves the live WebSocket Stream URL with auth token.
+   * - In browser, matches current server hostname on port 9000
    * - Automatically selects wss:// on https: and ws:// on http:
-   * - Matches host dynamically if not explicitly hardcoded
    * - Appends token query param safely
    */
   getWebSocketUrl(token?: string): string {
@@ -55,34 +62,36 @@ export const envConfig = {
       token ||
       (typeof window !== 'undefined' ? localStorage.getItem('vv_mgmt_token') : '') ||
       '';
-    const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
 
-    let baseWsUrl = '';
-    if (envWsUrl && envWsUrl.trim()) {
-      baseWsUrl = envWsUrl.trim();
-      // Upgrade ws:// to wss:// if loaded over https
-      if (
-        typeof window !== 'undefined' &&
-        window.location.protocol === 'https:' &&
-        baseWsUrl.startsWith('ws://')
-      ) {
-        baseWsUrl = baseWsUrl.replace(/^ws:\/\//, 'wss://');
-      }
-    } else if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      baseWsUrl = `${protocol}//${hostname}:9000/api/v1/ws/orders`;
-    } else {
-      baseWsUrl = 'ws://127.0.0.1:9000/api/v1/ws/orders';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
+
+      let baseWsUrl = '';
+      if (
+        envWsUrl &&
+        envWsUrl.trim() &&
+        !envWsUrl.includes('localhost') &&
+        !envWsUrl.includes('127.0.0.1')
+      ) {
+        baseWsUrl = envWsUrl.trim();
+        if (protocol === 'wss:' && baseWsUrl.startsWith('ws://')) {
+          baseWsUrl = baseWsUrl.replace(/^ws:\/\//, 'wss://');
+        }
+      } else {
+        baseWsUrl = `${protocol}//${hostname}:9000/api/v1/ws/orders`;
+      }
+
+      if (wsToken && !baseWsUrl.includes('token=')) {
+        const separator = baseWsUrl.includes('?') ? '&' : '?';
+        return `${baseWsUrl}${separator}token=${encodeURIComponent(wsToken)}`;
+      }
+
+      return baseWsUrl;
     }
 
-    // Attach token query param if not already present
-    if (wsToken && !baseWsUrl.includes('token=')) {
-      const separator = baseWsUrl.includes('?') ? '&' : '?';
-      return `${baseWsUrl}${separator}token=${encodeURIComponent(wsToken)}`;
-    }
-
-    return baseWsUrl;
+    return 'ws://127.0.0.1:9000/api/v1/ws/orders';
   },
 
   /**
@@ -90,12 +99,21 @@ export const envConfig = {
    * Customer frontend runs on port 4000.
    */
   getCustomerFrontendUrl(): string {
-    const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_FRONTEND_URL;
-    if (envUrl && envUrl.trim()) {
-      return envUrl.trim().replace(/\/+$/, '');
-    }
     if (typeof window !== 'undefined') {
-      return `${window.location.protocol}//${window.location.hostname}:4000`;
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol;
+      const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_FRONTEND_URL;
+
+      if (
+        envUrl &&
+        envUrl.trim() &&
+        !envUrl.includes('localhost') &&
+        !envUrl.includes('127.0.0.1')
+      ) {
+        return envUrl.trim().replace(/\/+$/, '');
+      }
+
+      return `${protocol}//${hostname}:4000`;
     }
     return 'http://localhost:4000';
   },
