@@ -54,8 +54,9 @@ export default function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to change password. Please check your credentials.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to change password. Please check your credentials.';
+      setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }

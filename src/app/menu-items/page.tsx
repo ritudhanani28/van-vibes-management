@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { MENU_CATEGORIES } from '@/data/vaan-vibes-menu';
+import { MENU_CATEGORIES } from '@/features/menu/constants/categories';
 import { MenuCategory, MenuItem } from '@/types/cafe';
 import { menuApi } from '@/api/menu';
-import { CustomSelect } from '@/components/common/CustomSelect';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   Search,
@@ -69,12 +69,13 @@ export default function MenuItemsAdminPage() {
   });
 
 
-  const loadMenu = useCallback(async () => {
-    try {
-      const [cats, dishItems] = await Promise.all([
-        menuApi.getCategories().catch(() => []),
-        menuApi.getMenuItems().catch(() => []),
-      ]);
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      menuApi.getCategories().catch(() => []),
+      menuApi.getMenuItems().catch(() => []),
+    ]).then(([cats, dishItems]) => {
+      if (!active) return;
       if (cats && cats.length > 0) {
         setCategories([
           { id: 'all', name: 'All Items', slug: 'all', icon: '🍽️', page: 0 },
@@ -84,21 +85,21 @@ export default function MenuItemsAdminPage() {
       if (dishItems && dishItems.length > 0) {
         setItems(sortMenuItemsAlphabetically(dishItems));
       }
-    } catch (err) {
+    }).catch((err) => {
       console.error('Failed to load menu items:', err);
-    }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
-
-  useEffect(() => {
-    loadMenu();
-  }, [loadMenu]);
 
   useEffect(() => {
     wsManager.connect();
 
-    const unsubAvail = wsManager.on('MENU_AVAILABILITY_CHANGED', (data: any) => {
-      const itemId = data?.itemId || data?.id;
-      const isAvailable = data?.isAvailable;
+    const unsubAvail = wsManager.on('MENU_AVAILABILITY_CHANGED', (data: unknown) => {
+      const d = data as { itemId?: string; id?: string; isAvailable?: boolean };
+      const itemId = d?.itemId || d?.id;
+      const isAvailable = d?.isAvailable;
       if (itemId !== undefined && isAvailable !== undefined) {
         setItems((prev) =>
           prev.map((item) => (item.id === itemId ? { ...item, isAvailable } : item))
@@ -106,8 +107,8 @@ export default function MenuItemsAdminPage() {
       }
     });
 
-    const unsubUpdate = wsManager.on('MENU_ITEM_UPDATED', (data: any) => {
-      const updatedItem = data;
+    const unsubUpdate = wsManager.on('MENU_ITEM_UPDATED', (data: unknown) => {
+      const updatedItem = data as MenuItem;
       if (updatedItem?.id) {
         setItems((prev) => {
           const exists = prev.some((item) => item.id === updatedItem.id);
@@ -119,8 +120,9 @@ export default function MenuItemsAdminPage() {
       }
     });
 
-    const unsubDelete = wsManager.on('MENU_ITEM_DELETED', (data: any) => {
-      const itemId = data?.itemId || data?.id;
+    const unsubDelete = wsManager.on('MENU_ITEM_DELETED', (data: unknown) => {
+      const d = data as { itemId?: string; id?: string };
+      const itemId = d?.itemId || d?.id;
       if (itemId) {
         setItems((prev) => prev.filter((item) => item.id !== itemId));
       }
@@ -181,9 +183,10 @@ export default function MenuItemsAdminPage() {
           ? `"${item.name}" marked as available`
           : `"${item.name}" marked as unavailable`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to toggle availability on backend:', err);
-      triggerFeedback(`Failed to update "${item.name}": ${err.message || 'Server error'}`);
+      const msg = err instanceof Error ? err.message : 'Server error';
+      triggerFeedback(`Failed to update "${item.name}": ${msg}`);
     }
   };
 
@@ -196,9 +199,10 @@ export default function MenuItemsAdminPage() {
       setItems((prev) => prev.filter((i) => i.id !== idToDelete));
       setDeletingItem(null);
       triggerFeedback(`"${name}" removed from menu catalog`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to delete menu item on backend:', err);
-      triggerFeedback(`Failed to delete "${name}": ${err.message || 'Server error'}`);
+      const msg = err instanceof Error ? err.message : 'Server error';
+      triggerFeedback(`Failed to delete "${name}": ${msg}`);
     }
   };
 
@@ -216,9 +220,10 @@ export default function MenuItemsAdminPage() {
       );
       setEditingItem(null);
       triggerFeedback(`"${name}" updated successfully`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to update dish on backend:', err);
-      triggerFeedback(`Failed to update "${name}": ${err.message || 'Server error'}`);
+      const msg = err instanceof Error ? err.message : 'Server error';
+      triggerFeedback(`Failed to update "${name}": ${msg}`);
     }
   };
 
@@ -242,7 +247,7 @@ export default function MenuItemsAdminPage() {
         return sortMenuItemsAlphabetically([...withoutCreated, created]);
       });
       triggerFeedback(`"${created.name}" added to menu catalog`);
-    } catch (err: any) {
+    } catch {
       // Local fallback
       const newItem: MenuItem = {
         id: `custom-${Date.now()}`,
@@ -730,7 +735,7 @@ export default function MenuItemsAdminPage() {
             <div>
               <h3 className="font-black text-base text-brand-green">Delete Dish</h3>
               <p className="text-xs text-brand-green/70 mt-1">
-                Are you sure you want to remove <span className="font-bold">"{deletingItem.name}"</span> from the menu catalog?
+                Are you sure you want to remove <span className="font-bold">&quot;{deletingItem.name}&quot;</span> from the menu catalog?
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { OrderCard } from '@/components/orders/OrderCard';
-import { BillModal } from '@/components/billing/BillModal';
-import { CustomSelect } from '@/components/common/CustomSelect';
+import { OrderCard } from '@/features/orders/components/OrderCard';
+import { BillModal } from '@/features/billing/components/BillModal';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import { Order, OrderStatus, TableInfo } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { tablesApi } from '@/api/tables';
@@ -52,7 +52,16 @@ export default function AdminDashboardPage() {
   }, [dateRange]);
 
   useEffect(() => {
-    loadData(dateRange);
+    let active = true;
+    Promise.all([
+      ordersApi.getOrders({ range: dateRange }).catch(() => []),
+      tablesApi.getTables().catch(() => []),
+    ]).then(([fetchedOrders, fetchedTables]) => {
+      if (active) {
+        setOrders(fetchedOrders);
+        setTables(fetchedTables);
+      }
+    });
 
     // Real-time WebSocket event listeners (silent background updates)
     const handleNewOrder = (newOrder: Order) => {
@@ -93,7 +102,7 @@ export default function AdminDashboardPage() {
       );
     });
 
-    const unsubTbl = wsManager.on('TABLE_STATUS_UPDATED', (data: { tableId: string; status: any }) => {
+    const unsubTbl = wsManager.on('TABLE_STATUS_UPDATED', (data: { tableId: string; status: TableInfo['status'] }) => {
       setTables((prev) =>
         prev.map((t) => (t.id === data.tableId ? { ...t, status: data.status } : t))
       );
@@ -104,6 +113,7 @@ export default function AdminDashboardPage() {
     }, 8000);
 
     return () => {
+      active = false;
       clearInterval(interval);
       unsubPlaced();
       unsubCreated();

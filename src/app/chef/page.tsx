@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { OrderCard } from '@/components/orders/OrderCard';
+import { OrderCard } from '@/features/orders/components/OrderCard';
 import { ordersApi } from '@/api/orders';
 import { Order, OrderStatus } from '@/types/cafe';
 import { wsManager } from '@/services/websocket/WebSocketManager';
@@ -33,7 +33,6 @@ const DATE_FILTER_OPTIONS: DateFilterOption[] = [
 export default function ChefKDSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'live' | 'completed'>('live');
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [chimeEnabled, setChimeEnabled] = useState(true);
 
   // Date Filter State
@@ -76,22 +75,24 @@ export default function ChefKDSPage() {
 
   // Load orders filtered by date range on the backend
   const loadOrders = useCallback(async () => {
-    setIsRefreshing(true);
     try {
       const filtered = await ordersApi.getOrders({ range: selectedFilter });
       setOrders(filtered);
     } catch (err) {
       console.error('Failed to load orders for Chef KDS:', err);
-    } finally {
-      setIsRefreshing(false);
     }
   }, [selectedFilter]);
 
   useEffect(() => {
-    loadOrders();
+    let active = true;
+    ordersApi.getOrders({ range: selectedFilter }).then((filtered) => {
+      if (active) setOrders(filtered);
+    }).catch((err) => {
+      console.error('Failed to load orders for Chef KDS:', err);
+    });
 
     // Order accepted by Admin -> appears as Incoming Order for Chef
-    const handleOrderAccepted = (acceptedOrder: any) => {
+    const handleOrderAccepted = (acceptedOrder: { orderId?: string; id?: string }) => {
       const orderId = acceptedOrder?.orderId || acceptedOrder?.id;
       if (!orderId) return;
       loadOrders();
@@ -119,6 +120,7 @@ export default function ChefKDSPage() {
 
     const interval = setInterval(loadOrders, 10000);
     return () => {
+      active = false;
       clearInterval(interval);
       unsubAccepted();
       unsubInKitchen();
@@ -127,7 +129,7 @@ export default function ChefKDSPage() {
       unsubUpdated();
       unsubTransferred();
     };
-  }, [loadOrders, playKitchenChime]);
+  }, [loadOrders, playKitchenChime, selectedFilter]);
 
   // Chef action: Only "Done" action allowed, moving from ACCEPTED to IN_KITCHEN
   const handleUpdateStatus = async (orderId: string, nextStatus: OrderStatus) => {

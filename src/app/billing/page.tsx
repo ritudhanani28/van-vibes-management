@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { BillModal } from '@/components/billing/BillModal';
+import { BillModal } from '@/features/billing/components/BillModal';
 import { DiningSession } from '@/types/cafe';
 import { diningSessionsApi } from '@/api/diningSessions';
 import { billingApi, InvoiceRecord } from '@/api/billing';
@@ -10,14 +10,10 @@ import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   Receipt,
   FileText,
-  Printer,
   CheckCircle2,
   Clock,
   Search,
   Layers,
-  AlertCircle,
-  CreditCard,
-  Banknote,
   UtensilsCrossed,
 } from 'lucide-react';
 
@@ -29,11 +25,9 @@ export default function BillingPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       const [sessData, pendingData, ledgerData] = await Promise.all([
         diningSessionsApi.getSessions(),
         billingApi.getPendingPayments(),
@@ -44,13 +38,24 @@ export default function BillingPage() {
       setLedgerInvoices(ledgerData);
     } catch (err) {
       console.error('Failed to load billing data:', err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([
+      diningSessionsApi.getSessions(),
+      billingApi.getPendingPayments(),
+      billingApi.getLedger(),
+    ]).then(([sessData, pendingData, ledgerData]) => {
+      if (active) {
+        setSessions(sessData);
+        setPendingInvoices(pendingData);
+        setLedgerInvoices(ledgerData);
+      }
+    }).catch((err) => {
+      console.error('Failed to load billing data:', err);
+    });
 
     const unsubTable = wsManager.on('TABLE_STATUS_UPDATED', () => loadData());
     const unsubPay = wsManager.on('PAYMENT_SETTLED', () => loadData());
@@ -58,6 +63,7 @@ export default function BillingPage() {
 
     const interval = setInterval(loadData, 8000);
     return () => {
+      active = false;
       clearInterval(interval);
       unsubTable();
       unsubPay();
@@ -80,7 +86,6 @@ export default function BillingPage() {
 
   // Metrics
   const totalInvoices = ledgerInvoices.length;
-  const totalGross = ledgerInvoices.reduce((acc, curr) => acc + (curr.subtotal || 0), 0);
   const totalTax = ledgerInvoices.reduce((acc, curr) => acc + (curr.taxAmount || 0), 0);
   const settledRevenue = ledgerInvoices
     .filter((inv) => inv.paymentStatus === 'PAID')

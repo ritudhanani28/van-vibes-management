@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, ChefHat, UserCheck, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ChefHat, UserCheck, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();

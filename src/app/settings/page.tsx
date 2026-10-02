@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Store, Clock, Save, Check } from 'lucide-react';
-import { CustomSelect } from '@/components/common/CustomSelect';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 
 export default function CafeSettingsPage() {
   const [saved, setSaved] = useState(false);

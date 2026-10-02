@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { tablesApi } from '@/api/tables';
 import { TableInfo } from '@/types/cafe';
-import { CustomSelect } from '@/components/common/CustomSelect';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import { envConfig } from '@/config/env';
 import {
@@ -18,7 +18,6 @@ import {
   Trash2,
   ArrowRightLeft,
   CheckCircle2,
-  ChevronDown,
   Users,
 } from 'lucide-react';
 
@@ -58,7 +57,7 @@ export default function TablesPage() {
       );
       await tablesApi.updateStatus(table.id, nextStatus);
       await fetchTables();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to update table status:', err);
       await fetchTables();
     } finally {
@@ -98,8 +97,9 @@ export default function TablesPage() {
       await tablesApi.deleteTable(tableToDelete.id);
       setTables((prev) => prev.filter((t) => t.id !== tableToDelete.id));
       setTableToDelete(null);
-    } catch (err: any) {
-      setDeleteError(err?.message || 'Failed to delete table. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete table. Please try again.';
+      setDeleteError(msg);
     } finally {
       setIsDeletingTable(false);
     }
@@ -121,7 +121,7 @@ export default function TablesPage() {
       const id = data.tableId || data.table_id;
       if (!id) return;
       setTables((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: data.status as any } : t))
+        prev.map((t) => (t.id === id ? { ...t, status: data.status as TableInfo['status'] } : t))
       );
     };
 
@@ -264,9 +264,10 @@ export default function TablesPage() {
 
       // Re-sync with backend
       fetchTables();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to transfer table. Please try again.';
       console.error('Failed to swipe table:', err);
-      setSwipeError(err?.message || 'Failed to transfer table. Please try again.');
+      setSwipeError(msg);
     } finally {
       setIsSwipingTable(false);
     }
@@ -293,9 +294,10 @@ export default function TablesPage() {
       setTables((prev) => [...prev, newTable].sort((a, b) => a.tableNumber - b.tableNumber));
       setIsAddModalOpen(false);
       setNewTableNumber('');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create table. Please check input.';
       console.error('Failed to create table:', err);
-      setAddTableError(err?.message || 'Failed to create table. Please check input.');
+      setAddTableError(msg);
     } finally {
       setIsSavingTable(false);
     }
@@ -457,6 +459,7 @@ export default function TablesPage() {
                 <div className="my-4 p-4 rounded-xl bg-brand-beige-light flex flex-col items-center justify-center border border-dashed border-brand-beige-dark">
                   <div className="w-28 h-28 bg-white p-2 rounded-xl shadow-2xs border border-brand-beige-dark flex items-center justify-center overflow-hidden">
                     {/* Backend-generated QR PNG stream */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={tablesApi.getQrCodeUrl(table.id)}
                       alt={`Table ${table.tableNumber} QR`}
@@ -598,6 +601,7 @@ export default function TablesPage() {
             </div>
 
             <div className="p-6 bg-brand-beige-light rounded-2xl border-2 border-dashed border-brand-green/30 flex flex-col items-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={tablesApi.getQrCodeUrl(selectedTable.id)}
                 alt={`Table ${selectedTable.tableNumber} Official QR`}

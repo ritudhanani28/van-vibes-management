@@ -1,21 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Order, OrderStatus } from '@/types/cafe';
 import { useAuth } from '@/context/AuthContext';
 import {
   Clock,
   CheckCircle2,
-  ChefHat,
-  Sparkles,
   AlertTriangle,
   Receipt,
   XCircle,
   User,
   Phone,
   Utensils,
-  ArrowRight,
-  Send,
 } from 'lucide-react';
 
 interface Props {
@@ -31,6 +27,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   const [isUpdating, setIsUpdating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const [elapsedMinutes, setElapsedMinutes] = useState(0);
 
   // Status Badge Configuration
   const getStatusBadge = (status: OrderStatus) => {
@@ -79,9 +76,18 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   const formattedTime = !isNaN(orderDate.getTime())
     ? orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
-  const elapsedMinutes = !isNaN(orderDate.getTime())
-    ? Math.max(0, Math.floor((Date.now() - orderDate.getTime()) / (1000 * 60)))
-    : 0;
+
+  useEffect(() => {
+    const updateElapsed = () => {
+      const orderTime = new Date(order.createdAt).getTime();
+      if (!isNaN(orderTime)) {
+        setElapsedMinutes(Math.max(0, Math.floor((Date.now() - orderTime) / (1000 * 60))));
+      }
+    };
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 30000);
+    return () => clearInterval(interval);
+  }, [order.createdAt]);
 
   // Item counts & unit calculations
   const totalUnits = order.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -138,9 +144,10 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
     setErrorMessage(null);
     try {
       await onUpdateStatus(order.id, nextAction.target);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update order status';
       console.error('Failed to transition order status:', err);
-      setErrorMessage(err?.message || 'Failed to update order status');
+      setErrorMessage(msg);
     } finally {
       setIsUpdating(false);
     }
@@ -148,103 +155,110 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
 
   return (
     <div className="bg-white rounded-2xl border border-brand-beige-dark shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
-      {/* Top Header Strip */}
-      <div className="p-3.5 sm:p-4 border-b border-brand-beige-dark/60 bg-brand-beige-light/40 flex items-start justify-between gap-3">
+      {/* Top Header */}
+      <div className="p-3.5 sm:p-4 border-b border-brand-beige-dark/60 bg-brand-beige-light/40 flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-extrabold text-base sm:text-lg text-brand-green">
+            <span className="font-mono font-black text-sm text-brand-green tracking-wider">
               {order.id}
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-brand-green text-brand-beige font-black text-xs font-mono">
-              Table {order.tableNumber ?? '--'}
-            </span>
-            {order.diningSessionId && (
-              <span className="px-2 py-0.5 rounded-full bg-brand-beige border border-brand-beige-dark text-brand-green font-bold text-[10px] font-mono">
-                {order.diningSessionId}
-              </span>
-            )}
             <span
-              className={`px-2.5 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wider ${badge.color}`}
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border uppercase tracking-wider ${badge.color}`}
             >
               {badge.label}
             </span>
           </div>
 
-          {/* Customer details if available */}
-          <div className="flex items-center gap-3 mt-1.5 text-[11px] text-brand-green/70 flex-wrap">
+          <div className="flex items-center gap-2 mt-1 text-xs text-brand-green/70">
+            <span className="font-extrabold text-brand-green bg-brand-beige px-2 py-0.5 rounded-md">
+              Table {order.tableNumber}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1 font-mono">
+              <Clock className="w-3 h-3 text-brand-green/50" />
+              {formattedTime}
+            </span>
+            {elapsedMinutes > 0 && (
+              <>
+                <span>•</span>
+                <span
+                  className={`font-bold font-mono ${
+                    elapsedMinutes > 20
+                      ? 'text-red-600 animate-pulse'
+                      : elapsedMinutes > 10
+                      ? 'text-amber-600'
+                      : 'text-brand-green/60'
+                  }`}
+                >
+                  +{elapsedMinutes}m ago
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Payment Status (Admin Only) */}
+        {!isChef && (
+          <span
+            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 border ${
+              order.paymentStatus === 'PAID'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-amber-50 text-amber-800 border-amber-200'
+            }`}
+          >
+            {order.paymentStatus || 'PENDING'}
+          </span>
+        )}
+      </div>
+
+      {/* Customer Info & Notes */}
+      <div className="px-3.5 sm:px-4 pt-3 space-y-2">
+        {(order.customerName || order.customerMobile) && (
+          <div className="flex items-center gap-3 text-xs text-brand-green/80 flex-wrap">
             {order.customerName && (
-              <span className="flex items-center gap-1 font-semibold">
+              <span className="flex items-center gap-1 font-medium">
                 <User className="w-3 h-3 text-brand-green/50" />
                 {order.customerName}
               </span>
             )}
-            {/* Only Admin sees phone number */}
-            {!isChef && order.customerMobile && (
-              <span className="flex items-center gap-1 font-mono text-[10px]">
+            {order.customerMobile && (
+              <span className="flex items-center gap-1 font-mono text-brand-green/60">
                 <Phone className="w-3 h-3 text-brand-green/50" />
-                +91 {order.customerMobile}
+                {order.customerMobile}
               </span>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Date/Time and Elapsed Time Badge */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <div
-            className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg ${
-              elapsedMinutes > 20
-                ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse'
-                : 'bg-brand-beige text-brand-green border border-brand-beige-dark'
-            }`}
-          >
-            <Clock className="w-3 h-3" />
-            <span>{elapsedMinutes}m ago</span>
+        {order.specialInstructions && (
+          <div className="p-2 rounded-xl bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="leading-snug">
+              <span className="font-bold">Instructions: </span>
+              {order.specialInstructions}
+            </p>
           </div>
-          {formattedTime && (
-            <span className="text-[10px] font-mono text-brand-green/50">
-              {formattedTime}
-            </span>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Special Kitchen Notes / Instructions Alert */}
-      {order.specialInstructions && (
-        <div className="mx-3.5 sm:mx-4 mt-3 p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-amber-950 flex items-start gap-2 text-xs">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-black uppercase tracking-wider text-[10px] block text-amber-800">
-              Kitchen Note:
-            </span>
-            <p className="font-medium text-xs mt-0.5">{order.specialInstructions}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Itemized Order List */}
-      <div className="p-3.5 sm:p-4 space-y-2 flex-1">
-        {/* Count summary: Distinctly shows total units and unique dishes */}
-        <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-brand-green/60 mb-1">
+      {/* Order Items List */}
+      <div className="p-3.5 sm:p-4 flex-1">
+        <div className="flex items-center justify-between text-[11px] font-bold text-brand-green/50 uppercase tracking-wider pb-2 border-b border-brand-beige-dark/40 mb-2">
           <span>Items Ordered</span>
-          <span className="font-mono bg-brand-beige px-2 py-0.5 rounded-full text-brand-green border border-brand-beige-dark">
+          <span className="font-mono">
             {totalUnits} {totalUnits === 1 ? 'unit' : 'units'} ({uniqueItemsCount}{' '}
             {uniqueItemsCount === 1 ? 'item' : 'items'})
           </span>
         </div>
 
         <div className="divide-y divide-brand-beige-dark/40 text-xs">
-          {order.items.map((item) => {
+          {order.items.map((item, idx) => {
             const qty = item.quantity || 1;
-            const itemName = item.name || (item as any).item_name || 'Item';
+            const itemName = item.name || item.item_name || 'Item';
 
             // Authoritative price calculation from backend data
-            const rawUnitPrice =
-              (item as any).unitPrice ?? (item as any).unit_price ?? item.price;
-            const rawLineTotal =
-              (item as any).lineTotal ??
-              (item as any).line_total ??
-              (item as any).itemTotal ??
-              (item as any).item_total;
+            const rawUnitPrice = item.unitPrice ?? item.unit_price ?? item.price;
+            const rawLineTotal = item.lineTotal ?? item.line_total ?? item.itemTotal ?? item.item_total;
 
             let unitPrice = 0;
             let lineTotal = 0;
@@ -258,15 +272,18 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
             } else if (rawUnitPrice !== undefined && rawUnitPrice !== null && rawUnitPrice > 0) {
               unitPrice = Number(rawUnitPrice);
               lineTotal = unitPrice * qty;
+            } else if (item.price > 0) {
+              unitPrice = item.price;
+              lineTotal = item.price * qty;
             }
 
             return (
-              <div key={item.id} className="py-2.5 flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {/* Chef View: Extra Prominent Quantity Scannable from a distance */}
+              <div key={item.id || `${item.name}-${idx}`} className="py-2.5 flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  {/* High-visibility typography for Kitchen KDS vs clean styling for Admin */}
                   {isChef ? (
-                    <div className="flex items-center gap-3">
-                      <div className="px-2.5 py-1 rounded-lg bg-brand-green text-brand-gold text-sm font-black flex items-center justify-center font-mono shadow-xs border border-brand-green/40 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-brand-green text-brand-gold font-mono font-black text-sm flex items-center justify-center shrink-0 shadow-2xs">
                         {qty} ×
                       </div>
                       <span className="font-extrabold text-brand-green text-sm sm:text-base leading-tight truncate">
@@ -363,7 +380,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           </div>
         )}
 
-        {/* Action Controls - Anchored to the right, consistent button positioning */}
+        {/* Action Controls */}
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 ml-auto flex-wrap">
           {/* Admin Cancel Button (Only if PLACED) */}
           {!isChef && (order.status === 'PLACED' || order.status === 'ORDER_PLACED') && (
@@ -407,7 +424,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
             </>
           )}
 
-          {/* Billing Action: Generate Bill (Positioned to the left of the primary action, so Complete Order stays fixed on the right) */}
+          {/* Billing Action: Generate Bill */}
           {!isChef && (order.status === 'COMPLETED' || order.status === 'IN_KITCHEN' || order.status === 'SERVED') && onOpenBill && (
             <button
               type="button"
@@ -419,7 +436,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
             </button>
           )}
 
-          {/* Sequential Action Button: PLACED -> ACCEPTED -> SERVED -> COMPLETED (Fixed anchor on the far right) */}
+          {/* Sequential Action Button: PLACED -> ACCEPTED -> SERVED -> COMPLETED */}
           {nextAction && (
             <button
               type="button"

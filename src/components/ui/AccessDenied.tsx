@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { ShieldAlert, ArrowLeft, ChefHat, LayoutDashboard } from 'lucide-react';
+import { ShieldAlert, ChefHat, LayoutDashboard } from 'lucide-react';
 
 export function AccessDenied({ featureName = 'this section' }: { featureName?: string }) {
   const { user } = useAuth();

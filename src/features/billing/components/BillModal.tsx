@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BillData } from '@/types/cafe';
 import { billingApi } from '@/api/billing';
 import {
@@ -44,41 +44,49 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
 
-  const fetchBill = useCallback(async () => {
-    if (!sessionId && !orderId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      let data: BillData;
-      if (sessionId) {
-        data = await billingApi.getSessionReceipt(sessionId);
-      } else if (orderId) {
-        data = await billingApi.getBillReceipt(orderId);
-      } else {
-        return;
-      }
-      setBill(data);
-
-      const initialDisc = data.discountPercentage || (data.discountAmount && data.subtotal > 0 ? Math.round((data.discountAmount / data.subtotal) * 100) : 0);
-      const initialExtra = data.extraCharge || 0;
-
-      setAppliedDiscount(initialDisc);
-      setDiscountInput(initialDisc > 0 ? initialDisc.toString() : '');
-      setApplyDiscountChecked(false);
-
-      setAppliedExtraCharge(initialExtra);
-      setExtraChargeInput(initialExtra > 0 ? initialExtra.toString() : '');
-      setApplyExtraChargeChecked(false);
-    } catch (err: any) {
-      setError(err.message || 'Error loading invoice receipt');
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId, orderId]);
-
   useEffect(() => {
-    fetchBill();
-  }, [fetchBill]);
+    let active = true;
+    if (!sessionId && !orderId) return;
+
+    const loadReceipt = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let data: BillData;
+        if (sessionId) {
+          data = await billingApi.getSessionReceipt(sessionId);
+        } else if (orderId) {
+          data = await billingApi.getBillReceipt(orderId);
+        } else {
+          return;
+        }
+        if (!active) return;
+        setBill(data);
+
+        const initialDisc = data.discountPercentage || (data.discountAmount && data.subtotal > 0 ? Math.round((data.discountAmount / data.subtotal) * 100) : 0);
+        const initialExtra = data.extraCharge || 0;
+
+        setAppliedDiscount(initialDisc);
+        setDiscountInput(initialDisc > 0 ? initialDisc.toString() : "");
+        setApplyDiscountChecked(false);
+
+        setAppliedExtraCharge(initialExtra);
+        setExtraChargeInput(initialExtra > 0 ? initialExtra.toString() : "");
+        setApplyExtraChargeChecked(false);
+      } catch (err: unknown) {
+        if (!active) return;
+        const msg = err instanceof Error ? err.message : "Error loading invoice receipt";
+        setError(msg);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadReceipt();
+    return () => {
+      active = false;
+    };
+  }, [sessionId, orderId]);
 
   // Apply Discount: updates discount only, unchecks & closes only discount box, keeps buttons visible
   const handleApplyDiscount = (percentage: number) => {
@@ -179,8 +187,9 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
       setBill(updatedBill);
       setShowConfirmModal(false);
       onSettled?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate final bill');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate final bill';
+      setError(msg);
       setShowConfirmModal(false);
     } finally {
       setIsGeneratingFinalBill(false);
@@ -315,8 +324,9 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
       }
       setBill({ ...bill, paymentStatus: 'PAID', sessionStatus: 'CLOSED' });
       onSettled?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to settle payment');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to settle payment';
+      setError(msg);
     } finally {
       setIsSettling(false);
     }

@@ -15,11 +15,12 @@ export type WebSocketEventType =
   | 'CONNECT'
   | 'DISCONNECT';
 
-export type EventCallback = (data: any) => void;
+export type EventCallback<T = unknown> = (data: T) => void;
+type InternalListener = (data: unknown) => void;
 
 class WebSocketManagerService {
   private socket: WebSocket | null = null;
-  private listeners: Map<string, Set<EventCallback>> = new Map();
+  private listeners: Map<string, Set<InternalListener>> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -91,22 +92,23 @@ class WebSocketManagerService {
     }
   }
 
-  public on(event: WebSocketEventType | string, callback: EventCallback) {
+  public on<T>(event: WebSocketEventType | string, callback: (data: T) => void) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)!.add(callback);
+    const internal = callback as unknown as InternalListener;
+    this.listeners.get(event)!.add(internal);
     return () => this.off(event, callback);
   }
 
-  public off(event: WebSocketEventType | string, callback: EventCallback) {
+  public off<T>(event: WebSocketEventType | string, callback: (data: T) => void) {
     const subs = this.listeners.get(event);
     if (subs) {
-      subs.delete(callback);
+      subs.delete(callback as unknown as InternalListener);
     }
   }
 
-  private emit(event: string, data: any) {
+  private emit(event: string, data: unknown) {
     const subs = this.listeners.get(event);
     if (subs) {
       subs.forEach((cb) => {

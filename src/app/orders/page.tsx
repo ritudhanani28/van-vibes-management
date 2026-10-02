@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { OrderCard } from '@/components/orders/OrderCard';
-import { BillModal } from '@/components/billing/BillModal';
+import { OrderCard } from '@/features/orders/components/OrderCard';
+import { BillModal } from '@/features/billing/components/BillModal';
 import { Order, OrderStatus } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { wsManager } from '@/services/websocket/WebSocketManager';
@@ -29,7 +29,12 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    loadOrders();
+    let active = true;
+    ordersApi.getOrders().then((all) => {
+      if (active) setOrders(all);
+    }).catch((err) => {
+      console.error('Failed to load orders:', err);
+    });
 
     // Listen for real-time order creation
     const handleNewOrder = (newOrder: Order) => {
@@ -61,6 +66,7 @@ export default function OrdersPage() {
 
     const interval = setInterval(loadOrders, 10000);
     return () => {
+      active = false;
       clearInterval(interval);
       unsubPlaced();
       unsubCreated();

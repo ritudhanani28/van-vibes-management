@@ -7,25 +7,37 @@ export interface LoginResponse {
   user: User;
 }
 
+interface RawUserResponse extends Partial<User> {
+  contact_number?: string;
+  assigned_station?: string;
+  is_active?: boolean;
+}
+
+interface RawLoginResponse {
+  access_token: string;
+  token_type: string;
+  user: RawUserResponse;
+}
+
 export const authApi = {
   login: async (email: string, password: string): Promise<LoginResponse> => {
-    const res = await apiClient<any>('/auth/login', {
+    const res = await apiClient<RawLoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
     return {
       ...res,
       user: {
-        ...res.user,
+        ...(res.user as User),
         contactNumber: res.user?.contactNumber || res.user?.contact_number,
       },
     };
   },
 
   getMe: async (): Promise<User> => {
-    const raw = await apiClient<any>('/auth/me');
+    const raw = await apiClient<RawUserResponse>('/auth/me');
     return {
-      ...raw,
+      ...(raw as User),
       contactNumber: raw.contactNumber || raw.contact_number,
     };
   },
@@ -35,9 +47,9 @@ export const authApi = {
   },
 
   getChefs: async (): Promise<User[]> => {
-    const list = await apiClient<any[]>('/auth/chefs');
+    const list = await apiClient<RawUserResponse[]>('/auth/chefs');
     return list.map((c) => ({
-      ...c,
+      ...(c as User),
       contactNumber: c.contactNumber || c.contact_number,
     }));
   },
@@ -51,7 +63,7 @@ export const authApi = {
     shift?: string;
     assignedStation?: string;
   }): Promise<User> => {
-    const res = await apiClient<any>('/auth/chefs', {
+    const res = await apiClient<RawUserResponse>('/auth/chefs', {
       method: 'POST',
       body: JSON.stringify({
         name: data.name,
@@ -64,7 +76,7 @@ export const authApi = {
       }),
     });
     return {
-      ...res,
+      ...(res as User),
       contactNumber: res.contactNumber || res.contact_number,
     };
   },
@@ -82,7 +94,7 @@ export const authApi = {
       isActive?: boolean;
     }
   ): Promise<User> => {
-    const res = await apiClient<any>(`/auth/chefs/${chefId}`, {
+    const res = await apiClient<RawUserResponse>(`/auth/chefs/${chefId}`, {
       method: 'PUT',
       body: JSON.stringify({
         name: data.name,
@@ -96,7 +108,7 @@ export const authApi = {
       }),
     });
     return {
-      ...res,
+      ...(res as User),
       contactNumber: res.contactNumber || res.contact_number,
     };
   },

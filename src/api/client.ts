@@ -41,12 +41,12 @@ export async function apiClient<T>(
     if (window.location.pathname !== '/login') {
       localStorage.removeItem('vv_mgmt_token');
       localStorage.removeItem('vv_mgmt_auth');
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   }
 
   const text = await response.text();
-  let json: any = null;
+  let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
@@ -54,10 +54,11 @@ export async function apiClient<T>(
   }
 
   if (!response.ok) {
+    const errObj = json && typeof json === "object" ? (json as Record<string, unknown>) : null;
     const errorMsg =
-      json?.detail ||
-      json?.message ||
-      json?.error ||
+      (typeof errObj?.detail === "string" ? errObj.detail : null) ||
+      (typeof errObj?.message === "string" ? errObj.message : null) ||
+      (typeof errObj?.error === "string" ? errObj.error : null) ||
       `HTTP error ${response.status}: ${response.statusText}`;
     throw new Error(errorMsg);
   }

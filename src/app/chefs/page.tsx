@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { authApi } from '@/api/auth';
 import { User, UserRole } from '@/types/auth';
-import { CustomSelect } from '@/components/common/CustomSelect';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import {
   ChefHat,
   Plus,
@@ -58,21 +58,19 @@ export default function ChefManagementPage() {
     setTimeout(() => setBannerSuccess(null), 4000);
   };
 
-  const fetchChefs = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await authApi.getChefs();
-      setChefs(data);
-    } catch (err: any) {
-      console.error('Error fetching chefs:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchChefs();
-  }, [fetchChefs]);
+    let active = true;
+    authApi.getChefs().then((data) => {
+      if (active) setChefs(data);
+    }).catch((err) => {
+      console.error('Error fetching chefs:', err);
+    }).finally(() => {
+      if (active) setIsLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Validation Helpers
   const validateContactNumber = (num: string): string | null => {
@@ -174,8 +172,9 @@ export default function ChefManagementPage() {
       setChefs((prev) => [newChef, ...prev]);
       showSuccessBanner(`Chef "${newChef.name}" account created successfully.`);
       setIsAddModalOpen(false);
-    } catch (err: any) {
-      setAddError(err?.message || 'Failed to create chef account. Email may already be registered.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create chef account. Email may already be registered.';
+      setAddError(msg);
     } finally {
       setIsAdding(false);
     }
@@ -236,8 +235,9 @@ export default function ChefManagementPage() {
 
       setIsEditModalOpen(false);
       setEditingChef(null);
-    } catch (err: any) {
-      setEditError(err?.message || 'Failed to update chef details.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update chef details.';
+      setEditError(msg);
     } finally {
       setIsSavingEdit(false);
     }
@@ -253,8 +253,9 @@ export default function ChefManagementPage() {
       setChefs((prev) => prev.filter((c) => c.id !== chefToDelete.id));
       showSuccessBanner(`Chef "${chefToDelete.name}" was successfully removed.`);
       setChefToDelete(null);
-    } catch (err: any) {
-      setDeleteError(err?.message || 'Failed to delete chef. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete chef. Please try again.';
+      setDeleteError(msg);
     } finally {
       setIsDeleting(false);
     }

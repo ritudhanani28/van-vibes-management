@@ -83,7 +83,7 @@ export interface OrderItem {
   category?: string;
   price: number;
   unitPrice?: number;
-  unit_price: number;
+  unit_price?: number;
   itemTotal?: number;
   item_total?: number;
   lineTotal?: number;

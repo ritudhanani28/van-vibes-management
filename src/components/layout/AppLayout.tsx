@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { AccessDenied } from '@/components/common/AccessDenied';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 import {
   LayoutDashboard,
   ChefHat,
@@ -17,7 +17,6 @@ import {
   Menu as MenuIcon,
   X,
   UtensilsCrossed,
-  ShieldCheck,
   ChevronRight,
   Users,
 } from 'lucide-react';

@@ -84,10 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         return { success: true };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Invalid credentials. Please check your email and password.';
         return {
           success: false,
-          error: err?.message || 'Invalid credentials. Please check your email and password.',
+          error: msg,
         };
       }
     },

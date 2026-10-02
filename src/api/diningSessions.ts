@@ -1,9 +1,10 @@
 import { apiClient } from './client';
-import { DiningSession } from '@/types/cafe';
+import { DiningSession, Order } from '@/types/cafe';
+import { InvoiceRecord } from './billing';
 
 export interface DiningSessionDetail extends DiningSession {
-  orders: any[];
-  invoice?: any;
+  orders: Order[];
+  invoice?: InvoiceRecord;
   subtotal: number;
   tax: number;
   discountPercentage: number;
