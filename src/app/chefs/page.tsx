@@ -78,12 +78,11 @@ export default function ChefManagementPage() {
     if (!trimmed) {
       return 'Contact number is required.';
     }
-    const digitsOnly = trimmed.replace(/\D/g, '');
-    if (digitsOnly.length < 10) {
-      return 'Contact number must contain at least 10 digits.';
+    if (!/^\d+$/.test(trimmed)) {
+      return 'Contact number must contain only numeric digits (no letters, spaces, or special characters).';
     }
-    if (digitsOnly.length > 15) {
-      return 'Contact number is too long (maximum 15 digits).';
+    if (trimmed.length !== 10) {
+      return 'Contact number must be exactly 10 digits.';
     }
     return null;
   };
@@ -525,11 +524,14 @@ export default function ChefManagementPage() {
                   <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
                 </div>
                 <input
-                  type="tel"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
                   required
-                  placeholder="e.g. 9876543210"
+                  placeholder="10-digit mobile number"
                   value={addContact}
-                  onChange={(e) => setAddContact(e.target.value)}
+                  onChange={(e) => setAddContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   disabled={isAdding}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
                 />
@@ -688,11 +690,14 @@ export default function ChefManagementPage() {
                   <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
                 </div>
                 <input
-                  type="tel"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
                   required
-                  placeholder="e.g. 9876543210"
+                  placeholder="10-digit mobile number"
                   value={editContact}
-                  onChange={(e) => setEditContact(e.target.value)}
+                  onChange={(e) => setEditContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   disabled={isSavingEdit}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
                 />

@@ -19,6 +19,7 @@ import {
   UtensilsCrossed,
   ChevronRight,
   Users,
+  Download,
 } from 'lucide-react';
 
 interface NavItem {
@@ -78,6 +79,13 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Menu Catalog',
     href: '/menu-items',
     icon: UtensilsCrossed,
+    roles: ['ADMIN'],
+  },
+  // Export Data (Admin Only)
+  {
+    name: 'Export Data',
+    href: '/export',
+    icon: Download,
     roles: ['ADMIN'],
   },
   // Settings (Admin Only)

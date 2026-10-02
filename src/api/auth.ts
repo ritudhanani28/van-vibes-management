@@ -119,6 +119,23 @@ export const authApi = {
     });
   },
 
+  updateProfile: async (data: {
+    name: string;
+    contactNumber?: string;
+  }): Promise<User> => {
+    const res = await apiClient<RawUserResponse>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: data.name,
+        contact_number: data.contactNumber,
+      }),
+    });
+    return {
+      ...(res as User),
+      contactNumber: res.contactNumber || res.contact_number,
+    };
+  },
+
   changePassword: async (data: {
     currentPassword: string;
     newPassword: string;

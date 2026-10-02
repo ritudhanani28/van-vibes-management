@@ -816,7 +816,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
 
               {/* Footer Stamp */}
               <div className="text-center pt-4 border-t border-dashed border-brand-beige-dark space-y-1">
-                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                <div className={`no-print inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                   isPaid
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                     : 'bg-amber-50 text-amber-800 border border-amber-200'

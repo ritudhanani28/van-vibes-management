@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ChefHat, UserCheck, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -27,17 +27,6 @@ export default function LoginPage() {
       setError(result.error || 'Failed to sign in. Please check credentials.');
       setIsSubmitting(false);
     }
-  };
-
-  const fillDemoAccount = (role: 'admin' | 'chef') => {
-    if (role === 'admin') {
-      setEmail('admin@vaanvibes.com');
-      setPassword('admin123');
-    } else {
-      setEmail('chef@vaanvibes.com');
-      setPassword('chef123');
-    }
-    setError(null);
   };
 
   return (
@@ -97,6 +86,7 @@ export default function LoginPage() {
                 </div>
                 <input
                   type="email"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. admin@vaanvibes.com"
@@ -115,6 +105,7 @@ export default function LoginPage() {
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -148,42 +139,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Role Fillers */}
-          <div className="pt-2 border-t border-brand-beige-dark/50 space-y-2">
-            <span className="text-[10px] uppercase font-bold text-brand-green/50 tracking-wider block text-center">
-              Quick Demo Access
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('admin')}
-                className="p-2.5 rounded-xl bg-brand-beige-light hover:bg-brand-beige text-brand-green border border-brand-beige-dark text-left transition-all group flex flex-col justify-between"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-bold text-brand-green">
-                  <UserCheck className="w-3.5 h-3.5 text-brand-gold" />
-                  <span>Admin Mode</span>
-                </div>
-                <span className="text-[10px] text-brand-green/60 mt-1 truncate">
-                  admin@vaanvibes.com
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('chef')}
-                className="p-2.5 rounded-xl bg-brand-beige-light hover:bg-brand-beige text-brand-green border border-brand-beige-dark text-left transition-all group flex flex-col justify-between"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-bold text-brand-green">
-                  <ChefHat className="w-3.5 h-3.5 text-brand-gold" />
-                  <span>Chef Mode</span>
-                </div>
-                <span className="text-[10px] text-brand-green/60 mt-1 truncate">
-                  chef@vaanvibes.com
-                </span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer Note */}

@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/features/orders/components/OrderCard';
@@ -17,6 +19,7 @@ import {
   Search,
   Filter,
   Calendar,
+  Download,
 } from 'lucide-react';
 
 export type DateRangeOption = 'today' | 'yesterday' | '30_days' | 'month' | 'year';
@@ -192,8 +195,8 @@ export default function AdminDashboardPage() {
             </p>
           </div>
 
-          {/* Date Filter Dropdown */}
-          <div className="flex items-center gap-2">
+          {/* Actions: Date Filter & Export Data */}
+          <div className="flex items-center gap-2.5 flex-wrap">
             <CustomSelect
               value={dateRange}
               onChange={(val) => setDateRange(val as DateRangeOption)}
@@ -206,6 +209,13 @@ export default function AdminDashboardPage() {
               buttonClassName="py-2 px-3 shadow-2xs"
               ariaLabel="Select Date Range"
             />
+            <Link
+              href="/export"
+              className="px-3.5 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+            >
+              <Download className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+              <span>Export Data</span>
+            </Link>
           </div>
         </div>
 

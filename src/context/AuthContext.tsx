@@ -13,6 +13,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  updateProfile: (data: { name: string; contactNumber?: string }) => Promise<{ success: boolean; error?: string }>;
   canAccess: (requiredRole?: UserRole | UserRole[]) => boolean;
 }
 
@@ -26,24 +27,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Load session from backend via stored JWT on mount
   useEffect(() => {
+    let isMounted = true;
     async function initSession() {
       try {
-        const token = localStorage.getItem('vv_mgmt_token');
+        const token = typeof window !== 'undefined' ? localStorage.getItem('vv_mgmt_token') : null;
         if (token) {
           const profile = await authApi.getMe();
+          if (!isMounted) return;
           const avatar = profile.role === 'ADMIN' ? '👨‍💼' : '👨‍🍳';
           setUser({ ...profile, avatar });
           wsManager.connect(token);
         }
-      } catch {
-        localStorage.removeItem('vv_mgmt_token');
-        localStorage.removeItem('vv_mgmt_auth');
-        setUser(null);
+      } catch (err) {
+        if (typeof window !== 'undefined') {
+          const errMsg = err instanceof Error ? err.message : '';
+          if (errMsg.includes('401') || errMsg.includes('Unauthorized') || errMsg.includes('Authentication token')) {
+            localStorage.removeItem('vv_mgmt_token');
+            localStorage.removeItem('vv_mgmt_auth');
+          }
+        }
+        if (isMounted) setUser(null);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     }
     initSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = useCallback(
@@ -95,6 +106,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [router]
   );
 
+  const updateProfile = useCallback(
+    async (data: { name: string; contactNumber?: string }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const updated = await authApi.updateProfile(data);
+        const avatar = updated.role === 'ADMIN' ? '👨‍💼' : '👨‍🍳';
+        setUser((prev) => (prev ? { ...prev, ...updated, avatar } : null));
+        return { success: true };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to update profile.';
+        return { success: false, error: msg };
+      }
+    },
+    []
+  );
+
   const logout = useCallback(() => {
     setUser(null);
     wsManager.disconnect();
@@ -140,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         canAccess,
+        updateProfile,
       }}
     >
       {children}
