@@ -118,6 +118,8 @@ export interface Order {
   discountPercentage?: number;
   discountAmount?: number;
   extraCharge?: number;
+  amountAfterAdjustments?: number;
+  roundOff?: number;
   total: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
@@ -164,6 +166,8 @@ export interface BillData {
   discountPercentage?: number;
   discountAmount?: number;
   extraCharge?: number;
+  amountAfterAdjustments?: number;
+  roundOff?: number;
   total: number;
   paymentStatus: PaymentStatus;
   createdAt: string;
@@ -186,6 +190,8 @@ export interface InvoiceLedgerItem {
   taxAmount: number;
   discountPercentage: number;
   discountAmount: number;
+  extraCharge?: number;
+  roundOff?: number;
   total: number;
   paymentMethod: string;
   paymentStatus: string;

@@ -18,6 +18,8 @@ export interface InvoiceRecord {
   discountPercentage?: number;
   discountAmount?: number;
   extraCharge?: number;
+  amountAfterAdjustments?: number;
+  roundOff?: number;
   total: number;
   paymentMethod: string;
   paymentStatus: string;

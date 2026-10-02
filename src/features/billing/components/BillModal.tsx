@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BillData } from '@/types/cafe';
+import { calculateBillBreakdown } from '@/utils/billing';
 import { billingApi } from '@/api/billing';
 import {
   FileText,
@@ -20,8 +21,6 @@ interface Props {
   onClose: () => void;
   onSettled?: () => void;
 }
-
-const roundTo2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
 export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const [bill, setBill] = useState<BillData | null>(null);
@@ -106,15 +105,15 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     // Update bill totals preview
     setBill((prev) => {
       if (!prev) return prev;
-      const subtotal = prev.subtotal || 0;
-      const discAmt = roundTo2(subtotal * (percentage / 100));
-      const extra = appliedExtraCharge;
-      const total = roundTo2(Math.max(0, subtotal - discAmt + extra));
+      const breakdown = calculateBillBreakdown(prev.subtotal || 0, percentage, appliedExtraCharge);
       return {
         ...prev,
-        discountPercentage: percentage,
-        discountAmount: discAmt,
-        total,
+        discountPercentage: breakdown.discountPercentage,
+        discountAmount: breakdown.discountAmount,
+        extraCharge: breakdown.extraCharge,
+        amountAfterAdjustments: breakdown.amountAfterAdjustments,
+        roundOff: breakdown.roundOff,
+        total: breakdown.total,
       };
     });
   };
@@ -146,13 +145,15 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     // Update bill totals preview
     setBill((prev) => {
       if (!prev) return prev;
-      const subtotal = prev.subtotal || 0;
-      const discAmt = roundTo2(subtotal * ((appliedDiscount || 0) / 100));
-      const total = roundTo2(Math.max(0, subtotal - discAmt + amount));
+      const breakdown = calculateBillBreakdown(prev.subtotal || 0, appliedDiscount || 0, amount);
       return {
         ...prev,
-        extraCharge: amount,
-        total,
+        discountPercentage: breakdown.discountPercentage,
+        discountAmount: breakdown.discountAmount,
+        extraCharge: breakdown.extraCharge,
+        amountAfterAdjustments: breakdown.amountAfterAdjustments,
+        roundOff: breakdown.roundOff,
+        total: breakdown.total,
       };
     });
   };
@@ -341,9 +342,26 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   // Options (Discount and Extra Charge) are ONLY visible before bill generation. After generating bill, they are hidden.
   const canEditCharges = isSessionOpen;
 
-  const hasDiscount = Boolean((bill?.discountAmount && bill.discountAmount > 0) || appliedDiscount > 0);
-  const hasExtraCharge = Boolean((bill?.extraCharge && bill.extraCharge > 0) || appliedExtraCharge > 0);
-  const showSubtotalAndBreakdown = hasDiscount || hasExtraCharge;
+  const totalQuantity = bill?.items ? bill.items.reduce((acc, it) => acc + (it.quantity || 0), 0) : 0;
+
+  const breakdown = bill
+    ? calculateBillBreakdown(
+        bill.subtotal,
+        bill.discountPercentage ?? appliedDiscount,
+        bill.extraCharge ?? appliedExtraCharge
+      )
+    : null;
+
+  const subtotal = bill?.subtotal ?? 0;
+  const discountPercentage = bill?.discountPercentage ?? breakdown?.discountPercentage ?? 0;
+  const discountAmount = bill?.discountAmount ?? breakdown?.discountAmount ?? 0;
+  const extraCharge = bill?.extraCharge ?? breakdown?.extraCharge ?? 0;
+  const amountAfterAdjustments = bill?.amountAfterAdjustments ?? breakdown?.amountAfterAdjustments ?? (subtotal - discountAmount + extraCharge);
+  const roundOff = bill?.roundOff ?? breakdown?.roundOff ?? 0;
+  const grandTotal = bill?.total ?? breakdown?.total ?? Math.round(amountAfterAdjustments);
+
+  const hasDiscount = Boolean(discountAmount > 0 || discountPercentage > 0);
+  const hasExtraCharge = Boolean(extraCharge > 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green-deep/70 backdrop-blur-xs animate-in fade-in duration-200">
@@ -437,7 +455,9 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <span className="font-hindi text-brand-gold">वन VIBES</span>
                   <span className="tracking-tight font-serif">CAFE</span>
                 </div>
-                <p className="text-xs text-brand-green/70">A Quiet Corner for Real Conversations</p>
+                <p className="text-xs text-brand-green/70">Cafe & Restro • Taste the Vibe</p>
+                <p className="text-[11px] text-brand-green/60 font-medium">Main Promenade, Serenita Arts Quarter, Surat, Gujarat</p>
+                <p className="text-[10px] text-brand-green/60 font-mono">Ph: +91 98765 43210</p>
               </div>
 
               {/* Invoice & Order Metadata */}
@@ -477,30 +497,48 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
               </div>
 
               {/* Items List */}
-              <div className="space-y-3">
-                <div className="flex justify-between text-[11px] font-black uppercase text-brand-green/60 tracking-wider pb-1 border-b border-brand-beige-dark/50">
-                  <span>Item</span>
-                  <div className="flex gap-4">
-                    <span className="w-8 text-center">Qty</span>
-                    <span className="w-16 text-right">Price</span>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-brand-beige-dark/30">
-                  {bill.items.map((item, idx) => (
-                    <div key={idx} className="py-2 flex justify-between items-start text-xs text-brand-green">
-                      <div className="flex-1 pr-2">
-                        <p className="font-bold">{item.name}</p>
-                        {item.notes && (
-                          <p className="text-[10px] text-brand-green/60 italic">{item.notes}</p>
-                        )}
-                      </div>
-                      <div className="flex gap-4">
-                        <span className="w-8 text-center text-brand-green/70">{item.quantity}</span>
-                        <span className="w-16 text-right font-bold font-mono">₹{item.totalPrice.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  ))}
+              <div className="space-y-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-brand-beige-dark/80 text-[11px] font-black uppercase text-brand-green/70 tracking-wider">
+                        <th className="py-2 pr-2 text-left font-extrabold">Item</th>
+                        <th className="py-2 px-2 text-center font-extrabold w-14">Qty.</th>
+                        <th className="py-2 px-2 text-right font-extrabold w-24">Item Price</th>
+                        <th className="py-2 pl-2 text-right font-extrabold w-24">Total Price</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-beige-dark/30 text-xs text-brand-green">
+                      {bill.items.map((item, idx) => (
+                        <tr key={idx} className="align-top">
+                          <td className="py-2 pr-2">
+                            <p className="font-bold leading-snug">{item.name}</p>
+                            {item.notes && (
+                              <p className="text-[10px] text-brand-green/60 italic mt-0.5">{item.notes}</p>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-center text-brand-green/80 font-medium font-mono">
+                            {item.quantity}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-brand-green/80">
+                            ₹{item.unitPrice.toFixed(2)}
+                          </td>
+                          <td className="py-2 pl-2 text-right font-bold font-mono text-brand-green">
+                            ₹{item.totalPrice.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-dashed border-brand-beige-dark/80 text-xs font-bold text-brand-green">
+                        <td className="py-2.5 pr-2 font-extrabold">Total Quantity</td>
+                        <td className="py-2.5 px-2 text-center font-mono font-extrabold text-brand-green">
+                          {totalQuantity}
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
 
@@ -676,35 +714,52 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
 
               {/* Bill Totals */}
               <div className="pt-3 border-t-2 border-brand-green space-y-1.5 text-xs">
-                {/* When discount or extra charge is present, display subtotal and breakdown */}
-                {showSubtotalAndBreakdown && (
-                  <div className="flex justify-between text-brand-green font-bold pb-1">
-                    <span>Subtotal</span>
-                    <span className="font-mono">₹{bill.subtotal.toFixed(2)}</span>
-                  </div>
-                )}
+                {/* Subtotal */}
+                <div className="flex justify-between text-brand-green font-bold pb-1">
+                  <span>Subtotal</span>
+                  <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+                </div>
 
                 {/* Bill-level discount line */}
-                {hasDiscount && bill.discountAmount ? (
+                {hasDiscount && discountAmount > 0 ? (
                   <div className="flex justify-between text-brand-green font-bold pb-1">
-                    <span>Discount ({bill.discountPercentage || Math.round((bill.discountAmount / (bill.subtotal || 1)) * 100)}%)</span>
-                    <span className="font-mono font-bold text-emerald-700">-₹{bill.discountAmount.toFixed(2)}</span>
+                    <span>Discount ({discountPercentage}%)</span>
+                    <span className="font-mono font-bold text-emerald-700">-₹{discountAmount.toFixed(2)}</span>
                   </div>
                 ) : null}
 
                 {/* Extra Charge line */}
-                {hasExtraCharge && bill.extraCharge ? (
+                {hasExtraCharge && extraCharge > 0 ? (
                   <div className="flex justify-between text-brand-green font-bold pb-1">
-                    <span>Extra Charge</span>
-                    <span className="font-mono font-bold text-brand-green-deep">+₹{bill.extraCharge.toFixed(2)}</span>
+                    <span>Extra Charges</span>
+                    <span className="font-mono font-bold text-brand-green-deep">+₹{extraCharge.toFixed(2)}</span>
                   </div>
                 ) : null}
 
-                <div className={`flex justify-between text-base font-black text-brand-green pt-1.5 ${
-                  showSubtotalAndBreakdown ? 'border-t border-brand-beige-dark' : ''
-                }`}>
-                  <span>Total Due</span>
-                  <span className="font-mono text-brand-green-deep">₹{bill.total.toFixed(2)}</span>
+                {/* Amount After Adjustments */}
+                {((hasDiscount && discountAmount > 0) || (hasExtraCharge && extraCharge > 0)) && (
+                  <div className="flex justify-between text-brand-green/80 font-bold pb-1 pt-1 border-t border-brand-beige-dark/50">
+                    <span>Amount After Adjustments</span>
+                    <span className="font-mono">₹{amountAfterAdjustments.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {/* Round Off line */}
+                <div className="flex justify-between text-brand-green font-bold pb-1">
+                  <span>Round Off</span>
+                  <span className="font-mono font-bold text-brand-green/90">
+                    {roundOff > 0
+                      ? `+₹${roundOff.toFixed(2)}`
+                      : roundOff < 0
+                      ? `-₹${Math.abs(roundOff).toFixed(2)}`
+                      : `₹0.00`}
+                  </span>
+                </div>
+
+                {/* Grand Total */}
+                <div className="flex justify-between text-base font-black text-brand-green pt-2 border-t-2 border-brand-green">
+                  <span>Grand Total</span>
+                  <span className="font-mono text-brand-green-deep">₹{grandTotal.toFixed(2)}</span>
                 </div>
               </div>
 
