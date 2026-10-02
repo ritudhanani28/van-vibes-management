@@ -7,8 +7,8 @@ describe('Export API Client', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as any).window;
-    delete (globalThis as any).document;
+    delete (globalThis as unknown as Record<string, unknown>).window;
+    delete (globalThis as unknown as Record<string, unknown>).document;
   });
 
   it('should send correct preview payload and receive counts', async () => {
@@ -65,7 +65,7 @@ describe('Export API Client', () => {
     const mockCreateObjectURL = vi.fn().mockReturnValue('blob:http://localhost/test-uuid');
     const mockRevokeObjectURL = vi.fn();
 
-    (globalThis as any).window = {
+    (globalThis as unknown as Record<string, unknown>).window = {
       location: {
         hostname: 'localhost',
         protocol: 'http:',
@@ -75,7 +75,7 @@ describe('Export API Client', () => {
         revokeObjectURL: mockRevokeObjectURL,
       },
     };
-    (globalThis as any).document = {
+    (globalThis as unknown as Record<string, unknown>).document = {
       createElement: vi.fn().mockReturnValue(mockElement),
       body: {
         appendChild: mockAppendChild,

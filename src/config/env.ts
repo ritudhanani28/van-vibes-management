@@ -1,3 +1,4 @@
+import { getCustomerFrontendBaseUrl } from '@/lib/qr-url';
 /**
  * Centralized Environment Configuration for Vaan Vibes Management Portal
  * Single Source of Truth for API, WebSocket, Customer URLs, and Port Settings.
@@ -14,7 +15,7 @@ export const envConfig = {
   /**
    * Dynamically resolves the Backend REST API base URL.
    * Backend runs on port 9000.
-   * - In browser, automatically matches current server hostname (e.g. 84.247.143.242)
+   * - In browser, automatically matches current server hostname
    * - Ignores build-time "localhost" when loaded from a remote host
    * - Prevents mixed-content errors by matching browser protocol (https vs http)
    * - In SSR, checks FASTAPI_BACKEND_URL or falls back to localhost:9000
@@ -98,23 +99,7 @@ export const envConfig = {
    * Resolves the customer-facing QR menu base URL for table QR links.
    * Customer frontend runs on port 4000.
    */
-  getCustomerFrontendUrl(): string {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      const protocol = window.location.protocol;
-      const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_FRONTEND_URL;
-
-      if (
-        envUrl &&
-        envUrl.trim() &&
-        !envUrl.includes('localhost') &&
-        !envUrl.includes('127.0.0.1')
-      ) {
-        return envUrl.trim().replace(/\/+$/, '');
-      }
-
-      return `${protocol}//${hostname}:4000`;
-    }
-    return 'http://localhost:4000';
+  getCustomerFrontendUrl(customOverride?: string | null): string {
+    return getCustomerFrontendBaseUrl({ customOverride });
   },
 };

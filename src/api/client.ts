@@ -39,7 +39,7 @@ export async function apiClient<T>(
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error();
+    throw new Error(message);
   }
 
   if (response.status === 401 && typeof window !== 'undefined') {

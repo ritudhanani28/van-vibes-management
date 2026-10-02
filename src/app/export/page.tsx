@@ -12,8 +12,6 @@ import {
 } from '@/api/export';
 import {
   Download,
-  Calendar,
-  Filter,
   CheckSquare,
   Square,
   FileSpreadsheet,
@@ -28,7 +26,6 @@ import {
   UtensilsCrossed,
   QrCode,
   Users,
-  Eye,
 } from 'lucide-react';
 
 interface CategoryOption {
@@ -99,9 +96,8 @@ export default function ExportDataPage() {
   const [dateRange, setDateRange] = useState<ExportDateRange>('last_7_days');
 
   // Custom date inputs
-  const todayStr = new Date().toISOString().split('T')[0];
-  const lastWeekStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(lastWeekStr);
+  const [todayStr] = useState(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(todayStr);
 
   // Category-specific filters

@@ -12,8 +12,10 @@ export interface StandeeData {
 }
 
 export const tablesApi = {
-  getTables: async (): Promise<TableInfo[]> => {
-    return apiClient<TableInfo[]>('/tables');
+  getTables: async (frontendUrl?: string): Promise<TableInfo[]> => {
+    const fUrl = frontendUrl || envConfig.getCustomerFrontendUrl();
+    const query = fUrl ? `?frontend_url=${encodeURIComponent(fUrl)}` : '';
+    return apiClient<TableInfo[]>(`/tables${query}`);
   },
 
   createTable: async (tableNumber: number, capacity: number = 4): Promise<TableInfo> => {
@@ -30,9 +32,9 @@ export const tablesApi = {
     });
   },
 
-  getStandeeData: async (tableId: string): Promise<StandeeData> => {
-    const frontendUrl = envConfig.getCustomerFrontendUrl();
-    return apiClient<StandeeData>(`/tables/${tableId}/standee?frontend_url=${encodeURIComponent(frontendUrl)}`);
+  getStandeeData: async (tableId: string, frontendUrl?: string): Promise<StandeeData> => {
+    const fUrl = frontendUrl || envConfig.getCustomerFrontendUrl();
+    return apiClient<StandeeData>(`/tables/${tableId}/standee?frontend_url=${encodeURIComponent(fUrl)}`);
   },
 
   deleteTable: async (tableId: string): Promise<{ message: string; id: string }> => {
@@ -41,9 +43,9 @@ export const tablesApi = {
     });
   },
 
-  getQrCodeUrl: (tableId: string): string => {
-    const frontendUrl = envConfig.getCustomerFrontendUrl();
-    return `${API_BASE_URL}/tables/${tableId}/qr?frontend_url=${encodeURIComponent(frontendUrl)}`;
+  getQrCodeUrl: (tableId: string, frontendUrl?: string): string => {
+    const fUrl = frontendUrl || envConfig.getCustomerFrontendUrl();
+    return `${API_BASE_URL}/tables/${tableId}/qr?frontend_url=${encodeURIComponent(fUrl)}`;
   },
 
   swipeTable: async (
