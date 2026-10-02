@@ -364,7 +364,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const hasExtraCharge = Boolean(extraCharge > 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green-deep/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-brand-green-deep/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div
         className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-brand-beige-dark overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
@@ -404,7 +404,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 printable-area bg-[#FCFBF8]" id="printable-receipt">
+        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5 printable-area bg-[#FCFBF8]" id="printable-receipt">
           {loading && (
             <div className="py-12 text-center text-brand-green/60 text-sm font-medium">
               Loading official tax invoice...
@@ -502,10 +502,10 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-brand-beige-dark/80 text-[11px] font-black uppercase text-brand-green/70 tracking-wider">
-                        <th className="py-2 pr-2 text-left font-extrabold">Item</th>
-                        <th className="py-2 px-2 text-center font-extrabold w-14">Qty.</th>
-                        <th className="py-2 px-2 text-right font-extrabold w-24">Item Price</th>
-                        <th className="py-2 pl-2 text-right font-extrabold w-24">Total Price</th>
+                        <th className="py-2 pr-1.5 sm:pr-2 text-left font-extrabold">Item</th>
+                        <th className="py-2 px-1 sm:px-2 text-center font-extrabold w-11 sm:w-14">Qty</th>
+                        <th className="py-2 px-1 sm:px-2 text-right font-extrabold w-18 sm:w-24">Price</th>
+                        <th className="py-2 pl-1 sm:pl-2 text-right font-extrabold w-18 sm:w-24">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-beige-dark/30 text-xs text-brand-green">

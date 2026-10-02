@@ -167,11 +167,11 @@ export default function BillingPage() {
         </div>
 
         {/* View Selection Tabs */}
-        <div className="flex border-b border-brand-beige-dark bg-white rounded-2xl p-1.5 shadow-2xs gap-1">
+        <div className="flex border-b border-brand-beige-dark bg-white rounded-2xl p-1.5 shadow-2xs gap-1 overflow-x-auto no-scrollbar flex-nowrap">
           <button
             type="button"
             onClick={() => setActiveTab('SESSIONS')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 sm:shrink flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'SESSIONS'
                 ? 'bg-brand-green text-brand-beige shadow-xs'
                 : 'text-brand-green/70 hover:bg-brand-beige-light'
@@ -184,7 +184,7 @@ export default function BillingPage() {
           <button
             type="button"
             onClick={() => setActiveTab('PENDING')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 sm:shrink flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'PENDING'
                 ? 'bg-brand-green text-brand-beige shadow-xs'
                 : 'text-brand-green/70 hover:bg-brand-beige-light'
@@ -197,7 +197,7 @@ export default function BillingPage() {
           <button
             type="button"
             onClick={() => setActiveTab('LEDGER')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 sm:shrink flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'LEDGER'
                 ? 'bg-brand-green text-brand-beige shadow-xs'
                 : 'text-brand-green/70 hover:bg-brand-beige-light'
@@ -318,7 +318,7 @@ export default function BillingPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[700px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-brand-beige-dark bg-brand-beige-light text-[10px] uppercase tracking-wider font-extrabold text-brand-green/70">
                     <th className="py-3 px-4">Invoice / Bill ID</th>
@@ -417,7 +417,7 @@ export default function BillingPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[750px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-brand-beige-dark bg-brand-beige-light text-[10px] uppercase tracking-wider font-extrabold text-brand-green/70">
                     <th className="py-3 px-4">Invoice ID</th>

@@ -338,7 +338,7 @@ export default function ChefManagementPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[650px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-brand-beige-dark bg-brand-beige-light/60 text-[11px] font-bold text-brand-green/70 uppercase tracking-wider">
                     <th className="px-5 py-3.5">Chef</th>
@@ -448,7 +448,7 @@ export default function ChefManagementPage() {
       {/* ADD NEW CHEF MODAL */}
       {/* ============================================================== */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-lg rounded-3xl border border-brand-beige-dark shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="p-5 border-b border-brand-beige-dark flex items-center justify-between bg-brand-beige/30">
@@ -613,7 +613,7 @@ export default function ChefManagementPage() {
       {/* EDIT CHEF MODAL (Directly opened on Edit button click) */}
       {/* ============================================================== */}
       {isEditModalOpen && editingChef && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-lg rounded-3xl border border-brand-beige-dark shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="p-5 border-b border-brand-beige-dark flex items-center justify-between bg-brand-beige/30">
@@ -783,7 +783,7 @@ export default function ChefManagementPage() {
       {/* DELETE CONFIRMATION MODAL */}
       {/* ============================================================== */}
       {chefToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-brand-green/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-md rounded-3xl border border-brand-beige-dark shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-red-100 rounded-2xl text-red-600">

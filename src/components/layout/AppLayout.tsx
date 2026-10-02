@@ -153,7 +153,7 @@ export function AppLayout({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="w-9 h-9 rounded-xl bg-brand-green-light hover:bg-brand-green-surface flex items-center justify-center text-brand-beige transition-colors"
+            className="w-9 h-9 min-h-[36px] min-w-[36px] rounded-xl bg-brand-green-light hover:bg-brand-green-surface flex items-center justify-center text-brand-beige transition-all active:scale-95 cursor-pointer"
             aria-label="Open menu"
           >
             <MenuIcon className="w-5 h-5" />
@@ -198,7 +198,7 @@ export function AppLayout({
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs md:hidden animate-in fade-in duration-200"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-brand-green text-brand-beige flex flex-col md:hidden shadow-2xl animate-in slide-in-from-left duration-250">
+          <aside className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-brand-green text-brand-beige flex flex-col md:hidden shadow-2xl animate-in slide-in-from-left duration-250">
             <div className="p-4 border-b border-brand-green-light flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-brand-beige text-brand-green font-black flex items-center justify-center text-sm border border-brand-gold">
@@ -214,7 +214,7 @@ export function AppLayout({
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-8 h-8 rounded-lg bg-brand-green-light flex items-center justify-center text-brand-beige"
+                className="w-9 h-9 min-h-[36px] min-w-[36px] rounded-xl bg-brand-green-light hover:bg-brand-green-surface flex items-center justify-center text-brand-beige transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
