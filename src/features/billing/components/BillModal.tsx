@@ -366,45 +366,36 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-brand-green-deep/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div
-        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-brand-beige-dark overflow-hidden flex flex-col max-h-[92vh]"
+        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-brand-beige-dark overflow-hidden flex flex-col h-full max-h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header (Hidden during print) */}
-        <div className="px-5 py-4 bg-brand-green text-brand-beige flex items-center justify-between border-b border-brand-green-light no-print">
-          <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-brand-gold" />
+        {/* 1. Header: Fixed at top (Hidden during print) */}
+        <div className="px-5 py-3.5 sm:py-4 bg-brand-green text-brand-beige flex items-center justify-between border-b border-brand-green-light shrink-0 no-print">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-brand-beige text-brand-green flex items-center justify-center font-black border border-brand-gold shrink-0">
+              व
+            </div>
             <div>
-              <h3 className="font-extrabold text-base sm:text-lg leading-tight">Digital Cafe Bill</h3>
+              <h3 className="font-extrabold text-base sm:text-lg leading-tight text-brand-beige">Digital Cafe Bill</h3>
               {bill && (
                 <p className="text-[10px] text-brand-gold font-mono">
-                  Table {bill.tableNumber} {bill.diningSessionId ? `• Session ${bill.diningSessionId}` : ''}
+                  Table {bill.tableNumber.toString().padStart(2, '0')} {bill.diningSessionId ? `• Session ${bill.diningSessionId}` : ''}
                 </p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {bill && (
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-beige text-brand-green font-bold text-xs hover:bg-brand-beige-dark transition-all cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5 text-brand-gold" />
-                <span>Print Bill</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-white/10 text-brand-beige/80 hover:text-brand-beige transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close receipt"
+            className="w-8 h-8 rounded-full bg-brand-green-light hover:bg-brand-green-surface text-brand-beige flex items-center justify-center transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5 printable-area bg-[#FCFBF8]" id="printable-receipt">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5 printable-area bg-[#FCFBF8]" id="printable-receipt">
           {loading && (
             <div className="py-12 text-center text-brand-green/60 text-sm font-medium">
               Loading official tax invoice...
@@ -763,54 +754,16 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 </div>
               </div>
 
-              {/* Generate Final Bill Action at bottom of the bill when session is open */}
+              {/* Informational Dining Session Notice ONLY - No buttons inside this notice */}
               {isSessionOpen && (
-                <div className="no-print pt-2">
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
-                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                          <span>Dining Session is OPEN • Table is OCCUPIED</span>
-                        </div>
-                        <p className="text-[11px] text-amber-800/80 mt-0.5 leading-snug">
-                          Click below to generate the final bill. The physical table will immediately become <strong>AVAILABLE</strong> for new guests while payment remains pending.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={isGeneratingFinalBill}
-                      onClick={() => setShowConfirmModal(true)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-                      <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill'}</span>
-                    </button>
+                <div className="no-print p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span>Dining Session is OPEN • Table is OCCUPIED</span>
                   </div>
-                </div>
-              )}
-
-              {/* Settle Action in Modal ONLY after Bill is Generated */}
-              {isBillGenerated && !isPaid && (
-                <div className="no-print pt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isSettling}
-                    onClick={() => handleSettle('UPI')}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSettling ? 'Settling...' : 'Settle via UPI'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSettling}
-                    onClick={() => handleSettle('CASH')}
-                    className="flex-1 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSettling ? 'Settling...' : 'Settle with Cash'}
-                  </button>
+                  <p className="text-[11px] text-amber-800/80 leading-snug">
+                    Use the <strong>Generate Final Bill</strong> action in the bottom panel below to conclude this session. The physical table will immediately become <strong>AVAILABLE</strong> for new guests while payment remains pending settlement.
+                  </p>
                 </div>
               )}
 
@@ -832,6 +785,127 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
             </>
           )}
         </div>
+
+        {/* 3. Sticky bottom action area: Fixed at bottom of modal via flex layout (Hidden during print) */}
+        {bill && !loading && (
+          <div className="shrink-0 p-3.5 sm:p-4 bg-brand-beige-light border-t border-brand-beige-dark space-y-2.5 no-print">
+            {/* Case 1: Session is OPEN -> Dedicated Bill-Generation Container */}
+            {isSessionOpen && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-brand-green px-0.5">
+                  <span className="font-bold text-brand-green/70">Session Open • Finalize Order</span>
+                  <span className="font-mono font-black text-sm text-brand-green-deep">
+                    Total Due: ₹{grandTotal.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isGeneratingFinalBill}
+                    onClick={() => setShowConfirmModal(true)}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+                    <span>{isGeneratingFinalBill ? 'Generating Final Bill...' : 'Generate Final Bill'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige text-brand-green font-bold text-xs transition-all cursor-pointer shrink-0"
+                    title="Print Bill"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+                    <span className="hidden xs:inline">Print Bill</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-3.5 py-2.5 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige text-brand-green/80 hover:text-brand-green font-bold text-xs transition-colors cursor-pointer shrink-0"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Case 2: Bill Generated & Payment Pending -> Settle Actions */}
+            {isBillGenerated && !isPaid && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs px-0.5">
+                  <span className="font-bold text-purple-900">Final Bill Generated • Payment Pending</span>
+                  <span className="font-mono font-black text-sm text-brand-green-deep">
+                    Total Due: ₹{grandTotal.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSettling}
+                    onClick={() => handleSettle('UPI')}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSettling ? 'Settling...' : 'Settle via UPI'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSettling}
+                    onClick={() => handleSettle('CASH')}
+                    className="flex-1 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSettling ? 'Settling...' : 'Settle Cash'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige text-brand-green font-bold text-xs transition-all cursor-pointer shrink-0"
+                    title="Print Bill"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+                    <span className="hidden xs:inline">Print</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-3 py-2.5 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige text-brand-green font-bold text-xs transition-colors cursor-pointer shrink-0"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Case 3: Payment Settled & Closed */}
+            {isPaid && (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Payment Settled ({bill.paymentStatus || 'PAID'})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-brand-beige-dark bg-white hover:bg-brand-beige text-brand-green font-bold text-xs transition-all cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+                    <span>Print Bill</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Confirmation Modal for Generate Bill */}

@@ -6,6 +6,43 @@ export const menuApi = {
     return apiClient<MenuCategory[]>('/categories');
   },
 
+  createCategory: async (category: {
+    id?: string;
+    name: string;
+    slug?: string;
+    icon?: string;
+    page?: number;
+    display_order?: number;
+    is_active?: boolean;
+  }): Promise<MenuCategory> => {
+    const slug =
+      category.slug ||
+      category.name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const id = category.id || slug;
+    return apiClient<MenuCategory>('/categories', {
+      method: 'POST',
+      body: JSON.stringify({
+        id,
+        name: category.name.trim(),
+        slug,
+        icon: category.icon || '🍽️',
+        page: category.page ?? 2,
+        display_order: category.display_order ?? 0,
+        is_active: category.is_active ?? true,
+      }),
+    });
+  },
+
+  deleteCategory: async (categoryId: string): Promise<{ message: string; id: string }> => {
+    return apiClient<{ message: string; id: string }>(`/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+  },
+
   getMenuItems: async (params?: { category?: string; search?: string; is_veg?: boolean }): Promise<MenuItem[]> => {
     const query = new URLSearchParams();
     if (params?.category && params.category !== 'all') query.set('category', params.category);

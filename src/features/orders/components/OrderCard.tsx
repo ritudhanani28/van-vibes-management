@@ -154,9 +154,9 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-brand-beige-dark shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
+    <div className="bg-white rounded-2xl border border-brand-beige-dark shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between h-[460px] sm:h-[490px] max-h-[520px] w-full">
       {/* Top Header */}
-      <div className="p-3.5 sm:p-4 border-b border-brand-beige-dark/60 bg-brand-beige-light/40 flex items-start justify-between gap-2">
+      <div className="p-3.5 sm:p-4 border-b border-brand-beige-dark/60 bg-brand-beige-light/40 flex items-start justify-between gap-2 shrink-0">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-black text-sm text-brand-green tracking-wider">
@@ -212,7 +212,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
       </div>
 
       {/* Customer Info & Notes */}
-      <div className="px-3.5 sm:px-4 pt-3 space-y-2">
+      <div className="px-3.5 sm:px-4 pt-3 space-y-2 shrink-0">
         {(order.customerName || order.customerMobile) && (
           <div className="flex items-center gap-3 text-xs text-brand-green/80 flex-wrap">
             {order.customerName && (
@@ -242,8 +242,8 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
       </div>
 
       {/* Order Items List */}
-      <div className="p-3.5 sm:p-4 flex-1">
-        <div className="flex items-center justify-between text-[11px] font-bold text-brand-green/50 uppercase tracking-wider pb-2 border-b border-brand-beige-dark/40 mb-2">
+      <div className="px-3.5 sm:px-4 py-2.5 flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between text-[11px] font-bold text-brand-green/50 uppercase tracking-wider pb-2 border-b border-brand-beige-dark/40 mb-1.5 shrink-0">
           <span>Items Ordered</span>
           <span className="font-mono">
             {totalUnits} {totalUnits === 1 ? 'unit' : 'units'} ({uniqueItemsCount}{' '}
@@ -251,7 +251,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           </span>
         </div>
 
-        <div className="divide-y divide-brand-beige-dark/40 text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 divide-y divide-brand-beige-dark/40 text-xs">
           {order.items.map((item, idx) => {
             const qty = item.quantity || 1;
             const itemName = item.name || item.item_name || 'Item';
@@ -353,14 +353,14 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
 
       {/* Error message alert if transition fails */}
       {errorMessage && (
-        <div className="mx-3.5 sm:mx-4 mb-2 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1.5">
+        <div className="mx-3.5 sm:mx-4 mb-2 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
           <XCircle className="w-3.5 h-3.5 shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
 
       {/* Bottom Action Footer */}
-      <div className="p-3 sm:p-3.5 border-t border-brand-beige-dark/60 bg-brand-beige-light/30 flex items-center justify-between gap-2 flex-wrap">
+      <div className="p-3 sm:p-3.5 border-t border-brand-beige-dark/60 bg-brand-beige-light/30 flex items-center justify-between gap-2 flex-wrap shrink-0 mt-auto">
         {/* Financial info for Admin ONLY / Kitchen summary for Chef */}
         {!isChef ? (
           <div className="shrink-0">

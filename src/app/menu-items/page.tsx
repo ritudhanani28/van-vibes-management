@@ -20,6 +20,9 @@ import {
   CheckCircle2,
   ChevronDown,
   Check,
+  Layers,
+  Loader2,
+  FolderPlus,
 } from 'lucide-react';
 
 const sortMenuItemsAlphabetically = (menuItems: MenuItem[]): MenuItem[] => {
@@ -58,15 +61,25 @@ export default function MenuItemsAdminPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
-  // Form State for Adding Item
+  // Category Management State
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("🍽️");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [categoryModalError, setCategoryModalError] = useState<string | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+
+  // Form State for Adding Item - category is UNSELECTED by default
   const [newItemForm, setNewItemForm] = useState({
     name: "",
-    category: "hot-coffee",
+    category: "",
     price: 150,
     description: "",
     isVeg: true,
     popular: false,
   });
+  const [newItemErrors, setNewItemErrors] = useState<{ name?: string; category?: string; price?: string }>({});
+  const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
 
   useEffect(() => {
@@ -227,9 +240,98 @@ export default function MenuItemsAdminPage() {
     }
   };
 
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      setCategoryModalError("Category name cannot be empty.");
+      return;
+    }
+
+    // Check duplicate
+    const exists = categories.some(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase() || c.slug.toLowerCase() === trimmed.toLowerCase().replace(/\s+/g, '-')
+    );
+    if (exists) {
+      setCategoryModalError(`Category "${trimmed}" already exists.`);
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    setCategoryModalError(null);
+
+    try {
+      const newCat = await menuApi.createCategory({
+        name: trimmed,
+        icon: newCategoryIcon || "🍽️",
+      });
+
+      setCategories((prev) => {
+        const withoutDup = prev.filter((c) => c.slug !== newCat.slug && c.id !== newCat.id);
+        return [...withoutDup, newCat];
+      });
+
+      // Auto-select in add modal if opened
+      if (isAddModalOpen && !newItemForm.category) {
+        setNewItemForm((prev) => ({ ...prev, category: newCat.slug }));
+        setNewItemErrors((prev) => ({ ...prev, category: undefined }));
+      }
+
+      setNewCategoryName("");
+      triggerFeedback(`Category "${newCat.name}" created successfully`);
+    } catch (err: unknown) {
+      console.error("Failed to create category:", err);
+      const msg = err instanceof Error ? err.message : "Failed to create category";
+      setCategoryModalError(msg);
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string, catName: string) => {
+    setDeletingCategoryId(catId);
+    try {
+      await menuApi.deleteCategory(catId);
+      setCategories((prev) => prev.filter((c) => c.id !== catId && c.slug !== catId));
+      if (selectedCategory === catId) {
+        setSelectedCategory("all");
+      }
+      triggerFeedback(`Category "${catName}" removed`);
+    } catch (err: unknown) {
+      console.error("Failed to delete category:", err);
+      const msg = err instanceof Error ? err.message : "Failed to delete category";
+      triggerFeedback(msg);
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  };
+
   const handleCreateItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemForm.name.trim()) return;
+    const errors: { name?: string; category?: string; price?: string } = {};
+
+    if (!newItemForm.name.trim()) {
+      errors.name = "Dish name is required.";
+    }
+
+    // Explicit category validation
+    const validCategorySlugs = categories.filter((c) => c.id !== "all").map((c) => c.slug);
+    if (!newItemForm.category || !validCategorySlugs.includes(newItemForm.category)) {
+      errors.category = "Please select a valid category for this dish.";
+    }
+
+    const priceNum = Number(newItemForm.price);
+    if (!priceNum || priceNum < 1) {
+      errors.price = "Price must be a valid number greater than 0.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setNewItemErrors(errors);
+      return;
+    }
+
+    setIsSubmittingItem(true);
+    setNewItemErrors({});
 
     try {
       const created = await menuApi.createMenuItem({
@@ -247,6 +349,15 @@ export default function MenuItemsAdminPage() {
         return sortMenuItemsAlphabetically([...withoutCreated, created]);
       });
       triggerFeedback(`"${created.name}" added to menu catalog`);
+      setIsAddModalOpen(false);
+      setNewItemForm({
+        name: "",
+        category: "", // unselected by default!
+        price: 150,
+        description: "",
+        isVeg: true,
+        popular: false,
+      });
     } catch {
       // Local fallback
       const newItem: MenuItem = {
@@ -264,17 +375,18 @@ export default function MenuItemsAdminPage() {
         return sortMenuItemsAlphabetically([...withoutNew, newItem]);
       });
       triggerFeedback(`"${newItem.name}" added to menu catalog`);
+      setIsAddModalOpen(false);
+      setNewItemForm({
+        name: "",
+        category: "", // unselected by default!
+        price: 150,
+        description: "",
+        isVeg: true,
+        popular: false,
+      });
+    } finally {
+      setIsSubmittingItem(false);
     }
-
-    setIsAddModalOpen(false);
-    setNewItemForm({
-      name: "",
-      category: categories[1]?.slug || "hot-coffee",
-      price: 150,
-      description: "",
-      isVeg: true,
-      popular: false,
-    });
   };
 
   const filteredItems = useMemo(() => {
@@ -319,16 +431,34 @@ export default function MenuItemsAdminPage() {
               </p>
             </div>
 
-            {/* Add Item Button */}
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              aria-label="Add menu item"
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs transition-all active:scale-95 shrink-0 min-h-[44px] touch-manipulation"
-            >
-              <Plus className="w-4 h-4 text-brand-gold" />
-              <span>Add Item</span>
-            </button>
+            {/* Action Buttons: Categories & Add Item */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryModalError(null);
+                  setIsCategoryModalOpen(true);
+                }}
+                aria-label="Manage menu categories"
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white border border-brand-beige-dark hover:bg-brand-beige-light text-brand-green font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0 min-h-[44px] touch-manipulation"
+              >
+                <Layers className="w-4 h-4 text-brand-gold" />
+                <span>Categories</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewItemErrors({});
+                  setIsAddModalOpen(true);
+                }}
+                aria-label="Add menu item"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs transition-all active:scale-95 shrink-0 min-h-[44px] touch-manipulation"
+              >
+                <Plus className="w-4 h-4 text-brand-gold" />
+                <span>Add Item</span>
+              </button>
+            </div>
           </div>
 
           {/* Search & Category Filter Controls */}
@@ -758,42 +888,93 @@ export default function MenuItemsAdminPage() {
         </div>
       )}
 
-      {/* Add New Item Modal */}
+      {/* Add New Item Modal - Responsive, fixed header/footer, independently scrollable body */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4">
-          <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark">
-              <h3 className="font-black text-base text-brand-green">Add New Menu Dish</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-brand-beige-dark flex flex-col max-h-[90dvh] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Fixed Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 sm:px-6 py-4 border-b border-brand-beige-dark bg-white">
+              <div>
+                <h3 className="font-black text-base sm:text-lg text-brand-green">Add New Menu Dish</h3>
+                <p className="text-xs text-brand-green/60 mt-0.5">Enter dish details to add to catalog</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 hover:bg-brand-beige-light rounded-full text-brand-green/60"
+                className="p-1.5 hover:bg-brand-beige-light rounded-full text-brand-green/60 transition-colors"
+                aria-label="Close modal"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateItem} className="space-y-3 mt-4">
+            {/* Independently Scrollable Form Body */}
+            <form id="add-dish-form" onSubmit={handleCreateItem} className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
+              {/* Dish Name */}
               <div>
-                <label className="text-[11px] font-bold text-brand-green/80 uppercase">Dish Name *</label>
+                <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wider">
+                  Dish Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Vanilla Cold Foam Cold Brew"
                   value={newItemForm.name}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green focus:ring-2 focus:ring-brand-green focus:outline-none"
+                  onChange={(e) => {
+                    setNewItemForm({ ...newItemForm, name: e.target.value });
+                    if (newItemErrors.name) setNewItemErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  className={`w-full mt-1.5 px-3.5 py-2.5 rounded-xl border ${newItemErrors.name ? 'border-red-500 focus:ring-red-500' : 'border-brand-beige-dark focus:ring-brand-green'} text-xs text-brand-green placeholder:text-brand-green/40 focus:ring-2 focus:outline-none bg-white`}
                 />
+                {newItemErrors.name && (
+                  <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{newItemErrors.name}</span>
+                  </p>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category *</label>
+              {/* Category - Full-width dedicated row to prevent dropdown clipping */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wider">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryModalError(null);
+                      setIsCategoryModalOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-brand-gold hover:text-brand-green transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Manage Categories</span>
+                  </button>
+                </div>
+
+                {categories.filter((c) => c.id !== "all").length === 0 ? (
+                  <div className="p-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 text-xs text-amber-800 flex items-center justify-between">
+                    <span>No categories available.</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategoryModalError(null);
+                        setIsCategoryModalOpen(true);
+                      }}
+                      className="text-xs font-bold text-brand-green underline"
+                    >
+                      Create One First
+                    </button>
+                  </div>
+                ) : (
                   <CustomSelect
                     value={newItemForm.category}
-                    onChange={(val) => setNewItemForm({ ...newItemForm, category: val })}
-                    placeholder="Select category..."
-                    className="mt-1"
+                    onChange={(val) => {
+                      setNewItemForm({ ...newItemForm, category: val });
+                      if (newItemErrors.category) setNewItemErrors((prev) => ({ ...prev, category: undefined }));
+                    }}
+                    placeholder="Select a category"
+                    className={newItemErrors.category ? 'ring-1 ring-red-500 rounded-xl' : ''}
                     options={categories
                       .filter((c) => c.id !== "all")
                       .map((c) => ({
@@ -801,41 +982,63 @@ export default function MenuItemsAdminPage() {
                         label: `${c.icon ? c.icon + ' ' : ''}${c.name}`,
                       }))}
                   />
-                </div>
+                )}
 
-                <div>
-                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Price (₹) *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newItemForm.price}
-                    onChange={(e) => setNewItemForm({ ...newItemForm, price: Number(e.target.value) })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green font-mono focus:ring-2 focus:ring-brand-green focus:outline-none"
-                  />
-                </div>
+                {newItemErrors.category && (
+                  <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{newItemErrors.category}</span>
+                  </p>
+                )}
               </div>
 
-
-
+              {/* Price */}
               <div>
-                <label className="text-[11px] font-bold text-brand-green/80 uppercase">Description</label>
+                <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wider">
+                  Price (₹) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="150"
+                  value={newItemForm.price || ''}
+                  onChange={(e) => {
+                    setNewItemForm({ ...newItemForm, price: Number(e.target.value) });
+                    if (newItemErrors.price) setNewItemErrors((prev) => ({ ...prev, price: undefined }));
+                  }}
+                  className={`w-full mt-1.5 px-3.5 py-2.5 rounded-xl border ${newItemErrors.price ? 'border-red-500 focus:ring-red-500' : 'border-brand-beige-dark focus:ring-brand-green'} text-xs text-brand-green font-mono focus:ring-2 focus:outline-none bg-white`}
+                />
+                {newItemErrors.price && (
+                  <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{newItemErrors.price}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wider">
+                  Description <span className="text-brand-green/40 font-normal lowercase">(optional)</span>
+                </label>
                 <textarea
                   rows={2}
                   placeholder="Ingredients, brewing style, flavor notes..."
                   value={newItemForm.description}
                   onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green focus:ring-2 focus:ring-brand-green focus:outline-none"
+                  className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:ring-2 focus:ring-brand-green focus:outline-none bg-white resize-none"
                 />
               </div>
 
-              <div className="flex items-center gap-4">
+              {/* Toggles */}
+              <div className="flex flex-wrap items-center gap-5 pt-1">
                 <label className="flex items-center gap-2 text-xs font-bold text-brand-green cursor-pointer">
                   <input
                     type="checkbox"
                     checked={newItemForm.isVeg}
                     onChange={(e) => setNewItemForm({ ...newItemForm, isVeg: e.target.checked })}
-                    className="rounded text-brand-green focus:ring-brand-green"
+                    className="rounded text-brand-green focus:ring-brand-green w-4 h-4"
                   />
                   <span>Vegetarian Dish</span>
                 </label>
@@ -845,28 +1048,177 @@ export default function MenuItemsAdminPage() {
                     type="checkbox"
                     checked={newItemForm.popular}
                     onChange={(e) => setNewItemForm({ ...newItemForm, popular: e.target.checked })}
-                    className="rounded text-brand-green focus:ring-brand-green"
+                    className="rounded text-brand-green focus:ring-brand-green w-4 h-4"
                   />
                   <span>Mark as Popular</span>
                 </label>
               </div>
+            </form>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-brand-beige-dark">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-3 py-2 rounded-xl bg-brand-beige hover:bg-brand-beige-dark text-brand-green font-bold text-xs"
-                >
-                  Cancel
-                </button>
+            {/* Fixed Footer */}
+            <div className="shrink-0 flex items-center justify-end gap-2.5 px-5 sm:px-6 py-3.5 border-t border-brand-beige-dark bg-[#FAF5EC]/60">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-white border border-brand-beige-dark hover:bg-brand-beige-light text-brand-green font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="add-dish-form"
+                disabled={isSubmittingItem}
+                className="px-5 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover disabled:opacity-50 text-brand-beige font-black text-xs shadow-xs transition-all flex items-center gap-1.5"
+              >
+                {isSubmittingItem && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Create Dish</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Management Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-brand-beige-dark flex flex-col max-h-[90dvh] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Fixed Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 sm:px-6 py-4 border-b border-brand-beige-dark bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-brand-beige flex items-center justify-center text-brand-green">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-brand-green">Menu Categories</h3>
+                  <p className="text-xs text-brand-green/60">Create and manage dish categories</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="p-1.5 hover:bg-brand-beige-light rounded-full text-brand-green/60 transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 space-y-5">
+              {/* Create Category Form */}
+              <form onSubmit={handleCreateCategory} className="bg-brand-beige/40 rounded-2xl p-4 border border-brand-beige-dark space-y-3">
+                <h4 className="text-xs font-black text-brand-green uppercase tracking-wider flex items-center gap-1.5">
+                  <FolderPlus className="w-3.5 h-3.5 text-brand-gold" />
+                  <span>Add New Category</span>
+                </h4>
+
+                <div>
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Desserts, Sandwiches, Mocktails..."
+                    value={newCategoryName}
+                    onChange={(e) => {
+                      setNewCategoryName(e.target.value);
+                      if (categoryModalError) setCategoryModalError(null);
+                    }}
+                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:ring-2 focus:ring-brand-green focus:outline-none bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category Icon</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={newCategoryIcon}
+                      onChange={(e) => setNewCategoryIcon(e.target.value)}
+                      className="w-14 text-center px-2 py-1.5 rounded-xl border border-brand-beige-dark text-lg bg-white focus:ring-2 focus:ring-brand-green focus:outline-none"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {["☕", "🍵", "🥪", "🍕", "🍰", "🍹", "🥤", "🥗", "🍨", "🍽️"].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setNewCategoryIcon(emoji)}
+                          className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all ${newCategoryIcon === emoji ? 'bg-brand-green text-white scale-110 shadow-xs' : 'bg-white hover:bg-brand-beige-light border border-brand-beige-dark/50'}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {categoryModalError && (
+                  <p className="text-[11px] text-red-600 font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{categoryModalError}</span>
+                  </p>
+                )}
+
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs"
+                  disabled={isCreatingCategory || !newCategoryName.trim()}
+                  className="w-full py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover disabled:opacity-50 text-brand-beige font-black text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 mt-2"
                 >
-                  Create Dish
+                  {isCreatingCategory && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Create Category</span>
                 </button>
+              </form>
+
+              {/* Existing Categories List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-brand-green/80">
+                  <span className="uppercase text-[11px] tracking-wider">Existing Categories</span>
+                  <span className="font-mono text-[10px]">{categories.filter((c) => c.id !== "all").length} Total</span>
+                </div>
+
+                <div className="divide-y divide-brand-beige-dark/50 border border-brand-beige-dark rounded-2xl bg-white overflow-hidden max-h-52 overflow-y-auto">
+                  {categories.filter((c) => c.id !== "all").map((cat) => {
+                    const dishCount = items.filter((i) => i.category === cat.slug).length;
+                    return (
+                      <div key={cat.id || cat.slug} className="flex items-center justify-between px-3.5 py-2.5 hover:bg-brand-beige-light/30 transition-colors">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-base shrink-0">{cat.icon || "🍽️"}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-brand-green truncate">{cat.name}</p>
+                            <p className="text-[10px] text-brand-green/60 font-mono">{dishCount} {dishCount === 1 ? 'dish' : 'dishes'}</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(cat.id || cat.slug, cat.name)}
+                          disabled={deletingCategoryId === (cat.id || cat.slug)}
+                          className="p-1.5 text-brand-green/40 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                          title={`Delete ${cat.name}`}
+                          aria-label={`Delete category ${cat.name}`}
+                        >
+                          {deletingCategoryId === (cat.id || cat.slug) ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </form>
+            </div>
+
+            {/* Fixed Footer */}
+            <div className="shrink-0 flex items-center justify-end px-5 sm:px-6 py-3.5 border-t border-brand-beige-dark bg-[#FAF5EC]/60">
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs transition-all"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
