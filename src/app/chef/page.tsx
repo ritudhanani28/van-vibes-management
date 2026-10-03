@@ -7,6 +7,13 @@ import { ordersApi } from '@/api/orders';
 import { Order, OrderStatus } from '@/types/cafe';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
+  AlertSound,
+  getSavedAlertSound,
+  getSavedKdsInterval,
+  playAlertSound,
+  ALERT_SOUND_STORAGE_KEY,
+} from '@/lib/sound';
+import {
   ChefHat,
   CheckCircle2,
   Clock,
@@ -34,6 +41,8 @@ export default function ChefKDSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'live' | 'completed'>('live');
   const [chimeEnabled, setChimeEnabled] = useState(true);
+  const [alertSound, setAlertSound] = useState<AlertSound>(() => getSavedAlertSound());
+  const [kdsIntervalSec, setKdsIntervalSec] = useState<number>(() => getSavedKdsInterval());
 
   // Date Filter State
   const [selectedFilter, setSelectedFilter] = useState<'today' | 'yesterday' | 'this_month' | 'this_year'>('today');
@@ -51,27 +60,47 @@ export default function ChefKDSPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Web Audio Kitchen chime for incoming orders
+  // Real-time synchronization with Cafe Settings (Sound & Refresh Interval)
+  useEffect(() => {
+    const handleSoundChange = (e: Event) => {
+      const customEvent = e as CustomEvent<AlertSound>;
+      if (customEvent.detail) {
+        setAlertSound(customEvent.detail);
+      } else {
+        setAlertSound(getSavedAlertSound());
+      }
+    };
+
+    const handleIntervalChange = (e: Event) => {
+      const customEvent = e as CustomEvent<number>;
+      if (customEvent.detail) {
+        setKdsIntervalSec(customEvent.detail);
+      } else {
+        setKdsIntervalSec(getSavedKdsInterval());
+      }
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === ALERT_SOUND_STORAGE_KEY) {
+        setAlertSound(getSavedAlertSound());
+      }
+    };
+
+    window.addEventListener('kds_alert_sound_change', handleSoundChange);
+    window.addEventListener('kds_interval_change', handleIntervalChange);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('kds_alert_sound_change', handleSoundChange);
+      window.removeEventListener('kds_interval_change', handleIntervalChange);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  // Web Audio Kitchen chime / bell for incoming orders synced with settings
   const playKitchenChime = useCallback(() => {
     if (!chimeEnabled) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880.0, ctx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.6);
-    } catch {
-      // Audio context might be restricted before user gesture
-    }
-  }, [chimeEnabled]);
+    playAlertSound(alertSound);
+  }, [chimeEnabled, alertSound]);
 
   // Load orders filtered by date range on the backend
   const loadOrders = useCallback(async () => {
@@ -118,7 +147,7 @@ export default function ChefKDSPage() {
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
     const unsubTransferred = wsManager.on('TABLE_TRANSFERRED', () => loadOrders());
 
-    const interval = setInterval(loadOrders, 10000);
+    const interval = setInterval(loadOrders, kdsIntervalSec * 1000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -129,7 +158,7 @@ export default function ChefKDSPage() {
       unsubUpdated();
       unsubTransferred();
     };
-  }, [loadOrders, playKitchenChime, selectedFilter]);
+  }, [loadOrders, playKitchenChime, selectedFilter, kdsIntervalSec]);
 
   // Chef action: Only "Done" action allowed, moving from ACCEPTED to IN_KITCHEN
   const handleUpdateStatus = async (orderId: string, nextStatus: OrderStatus) => {
@@ -230,13 +259,32 @@ export default function ChefKDSPage() {
               type="button"
               onClick={() => setChimeEnabled(!chimeEnabled)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                chimeEnabled
+                chimeEnabled && alertSound !== 'silent'
                   ? 'bg-brand-gold text-brand-green'
                   : 'bg-brand-green-light text-brand-beige'
               }`}
+              title={
+                !chimeEnabled
+                  ? 'Sound muted'
+                  : alertSound === 'silent'
+                  ? 'Silent mode set in settings'
+                  : `Alert sound: ${alertSound === 'bell' ? 'Kitchen Bell' : 'Dining Chime'}`
+              }
             >
-              {chimeEnabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-              <span>{chimeEnabled ? 'Sound ON' : 'Muted'}</span>
+              {chimeEnabled && alertSound !== 'silent' ? (
+                <Bell className="w-3.5 h-3.5" />
+              ) : (
+                <BellOff className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {!chimeEnabled
+                  ? 'Muted'
+                  : alertSound === 'silent'
+                  ? 'Silent'
+                  : alertSound === 'bell'
+                  ? 'Bell ON'
+                  : 'Chime ON'}
+              </span>
             </button>
           </div>
         </div>

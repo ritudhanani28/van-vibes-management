@@ -2,17 +2,59 @@
 
 import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Store, Clock, Save, Check } from 'lucide-react';
+import { Store, Clock, Save, Check, Volume2, VolumeX, Play } from 'lucide-react';
 import { CustomSelect } from '@/components/ui/CustomSelect';
+import {
+  AlertSound,
+  getSavedAlertSound,
+  saveAlertSound,
+  getSavedKdsInterval,
+  saveKdsInterval,
+  playAlertSound,
+} from '@/lib/sound';
 
 export default function CafeSettingsPage() {
   const [saved, setSaved] = useState(false);
-  const [kdsInterval, setKdsInterval] = useState('5');
-  const [alertSound, setAlertSound] = useState('chime');
+  const [kdsInterval, setKdsInterval] = useState<string>(() => String(getSavedKdsInterval()));
+  const [alertSound, setAlertSound] = useState<AlertSound>(() => getSavedAlertSound());
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  const handleAlertSoundChange = (value: string) => {
+    const sound = (value === 'bell' || value === 'silent' ? value : 'chime') as AlertSound;
+    setAlertSound(sound);
+    saveAlertSound(sound);
+
+    // Audio Preview: immediately play sound on selection
+    if (sound !== 'silent') {
+      setIsPlayingPreview(true);
+      playAlertSound(sound);
+      setTimeout(() => setIsPlayingPreview(false), 900);
+    }
+  };
+
+  const handleKdsIntervalChange = (value: string) => {
+    setKdsInterval(value);
+    saveKdsInterval(value);
+  };
+
+  const handlePlayPreview = () => {
+    if (alertSound === 'silent') return;
+    setIsPlayingPreview(true);
+    playAlertSound(alertSound);
+    setTimeout(() => setIsPlayingPreview(false), 900);
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    saveAlertSound(alertSound);
+    saveKdsInterval(kdsInterval);
     setSaved(true);
+
+    // Audio feedback on save
+    if (alertSound !== 'silent') {
+      playAlertSound(alertSound);
+    }
+
     setTimeout(() => setSaved(false), 2500);
   };
 
@@ -67,7 +109,7 @@ export default function CafeSettingsPage() {
                 <label className="font-bold text-brand-green">KDS Auto-Refresh Interval</label>
                 <CustomSelect
                   value={kdsInterval}
-                  onChange={setKdsInterval}
+                  onChange={handleKdsIntervalChange}
                   options={[
                     { value: '5', label: 'Every 5 seconds' },
                     { value: '10', label: 'Every 10 seconds' },
@@ -77,16 +119,40 @@ export default function CafeSettingsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-brand-green">Order Alert Sound</label>
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-brand-green flex items-center gap-1.5">
+                    {alertSound === 'silent' ? (
+                      <VolumeX className="w-3.5 h-3.5 text-stone-400" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-brand-gold" />
+                    )}
+                    <span>Order Alert Sound</span>
+                  </label>
+                  {alertSound !== 'silent' && (
+                    <button
+                      type="button"
+                      onClick={handlePlayPreview}
+                      disabled={isPlayingPreview}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-green/80 hover:text-brand-green hover:underline cursor-pointer transition-colors"
+                      title="Play sound preview"
+                    >
+                      <Play className={`w-3 h-3 text-brand-gold ${isPlayingPreview ? 'animate-pulse' : ''}`} />
+                      <span>{isPlayingPreview ? 'Playing...' : 'Test Sound'}</span>
+                    </button>
+                  )}
+                </div>
                 <CustomSelect
                   value={alertSound}
-                  onChange={setAlertSound}
+                  onChange={handleAlertSoundChange}
                   options={[
                     { value: 'chime', label: 'Subtle Dining Chime (Default)' },
                     { value: 'bell', label: 'Kitchen Bell' },
                     { value: 'silent', label: 'Silent' },
                   ]}
                 />
+                <p className="text-[10px] text-brand-green/60 mt-1">
+                  Plays when new orders arrive on the Chef KDS screen. Changes save automatically.
+                </p>
               </div>
             </div>
           </div>
