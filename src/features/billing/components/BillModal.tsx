@@ -1,18 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BillData } from '@/types/cafe';
+import { useRouter } from 'next/navigation';
+import { BillData, IncompleteOrderItem } from '@/types/cafe';
 import { calculateBillBreakdown } from '@/utils/billing';
 import { billingApi } from '@/api/billing';
+import { ApiError } from '@/api/client';
+import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   FileText,
   Printer,
   X,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Tag,
   Sparkles,
   Coins,
+  Eye,
 } from 'lucide-react';
 
 interface Props {
@@ -39,8 +44,11 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
   const [appliedExtraCharge, setAppliedExtraCharge] = useState<number>(0);
   const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
 
+  const router = useRouter();
   const [isGeneratingFinalBill, setIsGeneratingFinalBill] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showIncompleteWarningModal, setShowIncompleteWarningModal] = useState(false);
+  const [incompleteOrdersList, setIncompleteOrdersList] = useState<IncompleteOrderItem[]>([]);
   const [isSettling, setIsSettling] = useState(false);
 
   useEffect(() => {
@@ -61,6 +69,9 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
         }
         if (!active) return;
         setBill(data);
+        if (data.incompleteOrders) {
+          setIncompleteOrdersList(data.incompleteOrders);
+        }
 
         const initialDisc = data.discountPercentage || (data.discountAmount && data.subtotal > 0 ? Math.round((data.discountAmount / data.subtotal) * 100) : 0);
         const initialExtra = data.extraCharge || 0;
@@ -82,8 +93,50 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     };
 
     void loadReceipt();
+
+    // WebSocket real-time subscription to refresh order completion status
+    const handleOrderEvent = () => {
+      if (!sessionId && !orderId) return;
+      const refreshReceipt = async () => {
+        try {
+          let updated: BillData;
+          if (sessionId) {
+            updated = await billingApi.getSessionReceipt(sessionId);
+          } else if (orderId) {
+            updated = await billingApi.getBillReceipt(orderId);
+          } else {
+            return;
+          }
+          if (!active) return;
+          setBill(updated);
+          if (updated.incompleteOrders) {
+            setIncompleteOrdersList(updated.incompleteOrders);
+            if (!updated.hasIncompleteOrders || updated.incompleteOrders.length === 0) {
+              setShowIncompleteWarningModal(false);
+            }
+          }
+        } catch {
+          // Ignore background reload errors
+        }
+      };
+      void refreshReceipt();
+    };
+
+    const unsubPlaced = wsManager.on('ORDER_PLACED', handleOrderEvent);
+    const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleOrderEvent);
+    const unsubInKitchen = wsManager.on('ORDER_IN_KITCHEN', handleOrderEvent);
+    const unsubServed = wsManager.on('ORDER_SERVED', handleOrderEvent);
+    const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleOrderEvent);
+    const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleOrderEvent);
+
     return () => {
       active = false;
+      unsubPlaced();
+      unsubAccepted();
+      unsubInKitchen();
+      unsubServed();
+      unsubCompleted();
+      unsubUpdated();
     };
   }, [sessionId, orderId]);
 
@@ -167,6 +220,28 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
     handleApplyExtraCharge(parsed);
   };
 
+  // Check order completion before proceeding to bill generation
+  const handleInitiateGenerateBill = () => {
+    const hasIncomplete =
+      (bill?.hasIncompleteOrders && bill?.incompleteOrders && bill.incompleteOrders.length > 0) ||
+      incompleteOrdersList.length > 0;
+
+    if (hasIncomplete) {
+      if (bill?.incompleteOrders && bill.incompleteOrders.length > 0) {
+        setIncompleteOrdersList(bill.incompleteOrders);
+      }
+      setShowIncompleteWarningModal(true);
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  const handleReviewOrders = () => {
+    setShowIncompleteWarningModal(false);
+    onClose();
+    router.push('/orders');
+  };
+
   // Generate Final Bill: Official transition. AFTER this, discount and extra charge are hidden.
   const handleGenerateFinalBill = async () => {
     if (!bill) return;
@@ -189,6 +264,14 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
       setShowConfirmModal(false);
       onSettled?.();
     } catch (err: unknown) {
+      if (err instanceof ApiError && (err.code === 'SESSION_ORDERS_INCOMPLETE' || err.statusCode === 409)) {
+        if (err.incomplete_orders && err.incomplete_orders.length > 0) {
+          setIncompleteOrdersList(err.incomplete_orders);
+        }
+        setShowConfirmModal(false);
+        setShowIncompleteWarningModal(true);
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Failed to generate final bill';
       setError(msg);
       setShowConfirmModal(false);
@@ -803,7 +886,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   <button
                     type="button"
                     disabled={isGeneratingFinalBill}
-                    onClick={() => setShowConfirmModal(true)}
+                    onClick={handleInitiateGenerateBill}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-brand-gold shrink-0" />
@@ -947,6 +1030,128 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
               >
                 {isGeneratingFinalBill ? 'Generating...' : 'Generate Bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warning Modal for Incomplete Orders */}
+      {showIncompleteWarningModal && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-brand-green-deep/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-md bg-white rounded-2xl p-5 sm:p-6 shadow-2xl border border-amber-300 space-y-4 animate-in zoom-in-95 duration-150 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
+                <AlertTriangle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-extrabold text-base text-amber-950 leading-snug">
+                  Orders Still Incomplete
+                </h4>
+                <p className="text-[11px] font-semibold text-amber-800/80 mt-0.5">
+                  Table {bill?.tableNumber || 'Current'} {bill?.diningSessionId ? `• Session ${bill.diningSessionId}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIncompleteWarningModal(false)}
+                className="text-amber-800/60 hover:text-amber-900 p-1 rounded-lg hover:bg-amber-100/50 transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/90 text-xs text-amber-900 leading-relaxed font-medium">
+              <p>
+                Some orders for <strong>Table {bill?.tableNumber || ''}</strong> have not been marked as completed/served yet. Please verify that all items have been served to the customer before generating the final bill.
+              </p>
+            </div>
+
+            {/* List of Incomplete Orders */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-amber-900/80 uppercase tracking-wider flex items-center justify-between">
+                <span>Incomplete Orders ({incompleteOrdersList.length})</span>
+                <span className="text-[10px] text-amber-700 font-semibold">Must be Served / Completed</span>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-2 pr-1 divide-y divide-amber-100/70">
+                {incompleteOrdersList.map((order) => {
+                  const rawStatus = (order.status || 'PLACED').toUpperCase();
+                  const orderId = order.order_number || order.orderNumber || order.order_id || order.orderId || 'Order';
+                  
+                  let badgeStyle = 'bg-amber-100 text-amber-800 border-amber-300';
+                  let statusLabel = 'Placed';
+                  if (rawStatus === 'ACCEPTED') {
+                    badgeStyle = 'bg-blue-100 text-blue-800 border-blue-300';
+                    statusLabel = 'Accepted';
+                  } else if (rawStatus === 'IN_KITCHEN') {
+                    badgeStyle = 'bg-orange-100 text-orange-800 border-orange-300';
+                    statusLabel = 'In Kitchen';
+                  } else if (rawStatus === 'PLACED') {
+                    badgeStyle = 'bg-amber-100 text-amber-800 border-amber-300';
+                    statusLabel = 'Placed';
+                  } else {
+                    statusLabel = rawStatus;
+                  }
+
+                  return (
+                    <div
+                      key={order.order_id || order.orderId || orderId}
+                      className="pt-2 first:pt-0 p-3 rounded-xl bg-amber-50/40 border border-amber-200/60 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-xs text-brand-green">
+                            #{orderId}
+                          </span>
+                          <span className="text-[10px] text-brand-green/60 font-medium">
+                            Table {order.table_number || order.tableNumber || bill?.tableNumber}
+                          </span>
+                        </div>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${badgeStyle}`}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+
+                      {order.items && order.items.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {order.items.map((item, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-green bg-white px-2 py-0.5 rounded-lg border border-brand-beige-dark shadow-2xs"
+                            >
+                              <strong className="text-amber-800 font-extrabold">{item.quantity}x</strong>
+                              <span>{item.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-beige-dark/60">
+              <button
+                type="button"
+                onClick={() => setShowIncompleteWarningModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-brand-beige-light hover:bg-brand-beige text-brand-green font-bold text-xs transition-all cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleReviewOrders}
+                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Orders</span>
               </button>
             </div>
           </div>

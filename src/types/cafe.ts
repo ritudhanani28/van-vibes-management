@@ -139,6 +139,17 @@ export interface CafeDetails {
   taxRate: number; // 0.05
 }
 
+export interface IncompleteOrderItem {
+  order_id?: string;
+  orderId?: string;
+  order_number?: string;
+  orderNumber?: string;
+  table_number?: number;
+  tableNumber?: number;
+  status: string;
+  items?: Array<{ name: string; quantity: number }>;
+}
+
 export interface BillData {
   billNumber: string;
   orderId?: string;
@@ -171,6 +182,8 @@ export interface BillData {
   total: number;
   paymentStatus: PaymentStatus;
   createdAt: string;
+  hasIncompleteOrders?: boolean;
+  incompleteOrders?: IncompleteOrderItem[];
 }
 
 
