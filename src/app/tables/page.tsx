@@ -62,6 +62,278 @@ export default function TablesPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [updatingTableId, setUpdatingTableId] = useState<string | null>(null);
 
+  // Standee Printing State & Dedicated Print Handler
+  const [isPrintingStandee, setIsPrintingStandee] = useState(false);
+
+  const handlePrintStandee = async () => {
+    if (!selectedTable || isPrintingStandee) return;
+    setIsPrintingStandee(true);
+
+    try {
+      const tableNumberStr = selectedTable.tableNumber.toString().padStart(2, '0');
+
+      // Retrieve QR code: try Base64 standee data from backend first for fastest zero-latency inline image,
+      // fallback to modal img element src or getQrCodeUrl.
+      let qrSrc = '';
+      try {
+        const standeeData = await tablesApi.getStandeeData(selectedTable.id, qrBaseUrl);
+        if (standeeData?.qr_image_url) {
+          qrSrc = standeeData.qr_image_url;
+        }
+      } catch (err) {
+        console.warn('Backend standee data endpoint fallback:', err);
+      }
+
+      if (!qrSrc) {
+        const modalImg = document.getElementById('standee-modal-qr-img') as HTMLImageElement | null;
+        qrSrc = modalImg?.src || tablesApi.getQrCodeUrl(selectedTable.id, qrBaseUrl);
+      }
+
+      // Remove any previously created print iframe if exists
+      const existingFrame = document.getElementById('print-standee-frame');
+      if (existingFrame && existingFrame.parentNode) {
+        existingFrame.parentNode.removeChild(existingFrame);
+      }
+
+      // Create an invisible iframe for isolated single-page standee printing
+      const iframe = document.createElement('iframe');
+      iframe.id = 'print-standee-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '0';
+      iframe.style.left = '0';
+      iframe.style.width = '1px';
+      iframe.style.height = '1px';
+      iframe.style.opacity = '0.01';
+      iframe.style.border = 'none';
+      iframe.style.pointerEvents = 'none';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!doc) {
+        window.print();
+        setIsPrintingStandee(false);
+        return;
+      }
+
+      const standeeTitle = `Table-${tableNumberStr}-Standee-Vaan-Vibes`;
+
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>${standeeTitle}</title>
+            <style>
+              @page {
+                size: auto;
+                margin: 10mm 12mm;
+              }
+              * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #18312B !important;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+              }
+              .standee-wrapper {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 12px 0;
+              }
+              .standee-card {
+                width: 100%;
+                max-width: 380px;
+                margin: 0 auto;
+                padding: 26px 22px 20px 22px;
+                background: #ffffff !important;
+                border: 2px solid #D8C2A0;
+                border-radius: 26px;
+                text-align: center;
+                box-shadow: none !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
+              .emblem-badge {
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: #FAF5EC;
+                border: 1.5px solid #C8A25D;
+                color: #18312B;
+                font-size: 24px;
+                font-weight: 900;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 8px auto;
+                line-height: 1;
+              }
+              .brand-name {
+                font-size: 15px;
+                font-weight: 900;
+                letter-spacing: 1.5px;
+                color: #18312B;
+                text-transform: uppercase;
+              }
+              .brand-sub {
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                color: #C8A25D;
+                margin-top: 1px;
+                margin-bottom: 12px;
+                text-transform: uppercase;
+              }
+              .gold-divider {
+                width: 44px;
+                height: 2px;
+                background: #D8C2A0;
+                margin: 0 auto 12px auto;
+              }
+              .table-header {
+                font-size: 22px;
+                font-weight: 900;
+                color: #18312B;
+                margin-bottom: 3px;
+              }
+              .instruction-text {
+                font-size: 11px;
+                font-weight: 600;
+                color: #4B6358;
+                margin-bottom: 14px;
+              }
+              .qr-box {
+                background: #FAF5EC;
+                border: 2px dashed #C8A25D;
+                border-radius: 18px;
+                padding: 16px 12px 14px 12px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-bottom: 14px;
+              }
+              .qr-frame {
+                background: #ffffff;
+                padding: 8px;
+                border-radius: 12px;
+                border: 1px solid #D8C2A0;
+                display: inline-block;
+                width: 172px;
+                height: 172px;
+              }
+              .qr-img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                display: block;
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: crisp-edges;
+              }
+              .table-code {
+                font-size: 11px;
+                font-weight: 900;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                letter-spacing: 1.5px;
+                color: #18312B;
+                margin-top: 10px;
+                text-transform: uppercase;
+              }
+              .step-guide {
+                font-size: 9.5px;
+                font-weight: 700;
+                color: #18312B;
+                margin-top: 4px;
+              }
+              .app-free-tag {
+                font-size: 8px;
+                font-weight: 600;
+                color: #6B7C75;
+                margin-top: 3px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="standee-wrapper">
+              <div class="standee-card">
+                <div class="emblem-badge">व</div>
+                <div class="brand-name">Vaan Vibes</div>
+                <div class="brand-sub">Cafe &amp; Restro</div>
+                <div class="gold-divider"></div>
+                <div class="table-header">Table ${tableNumberStr}</div>
+                <div class="instruction-text">Scan with phone camera to view menu &amp; order</div>
+
+                <div class="qr-box">
+                  <div class="qr-frame">
+                    <img id="print-standee-qr" class="qr-img" src="${qrSrc}" alt="Table ${tableNumberStr} QR Code" />
+                  </div>
+                  <div class="table-code">${selectedTable.id} • VAAN VIBES</div>
+                </div>
+
+                <div class="step-guide">1. Open Camera &nbsp;•&nbsp; 2. Scan QR &nbsp;•&nbsp; 3. Order &amp; Enjoy</div>
+                <div class="app-free-tag">Powered by Vaan Vibes Digital Ordering • No App Needed</div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+      doc.close();
+
+      const printImg = doc.getElementById('print-standee-qr') as HTMLImageElement | null;
+      let printTriggered = false;
+
+      const executePrint = () => {
+        if (printTriggered) return;
+        printTriggered = true;
+        setIsPrintingStandee(false);
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (err) {
+          console.error('Error invoking print:', err);
+          window.print();
+        } finally {
+          setTimeout(() => {
+            if (iframe.parentNode) {
+              iframe.parentNode.removeChild(iframe);
+            }
+          }, 2000);
+        }
+      };
+
+      if (printImg) {
+        if (printImg.complete && printImg.naturalWidth > 0) {
+          setTimeout(executePrint, 60);
+        } else {
+          printImg.onload = () => setTimeout(executePrint, 60);
+          printImg.onerror = () => executePrint();
+          setTimeout(executePrint, 2500);
+        }
+      } else {
+        setTimeout(executePrint, 100);
+      }
+    } catch (err) {
+      console.error('Failed to prepare standee for printing:', err);
+      setIsPrintingStandee(false);
+      window.print();
+    }
+  };
+
   const handleToggleStatus = async (table: TableInfo) => {
     const nextStatus = table.status === 'OCCUPIED' ? 'AVAILABLE' : 'OCCUPIED';
     setOpenMenuTableId(null);
@@ -615,8 +887,11 @@ export default function TablesPage() {
 
       {/* Table Standee Modal with Backend QR Image */}
       {selectedTable && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4">
-          <div className="bg-white rounded-3xl p-5 sm:p-8 max-w-sm w-full text-center space-y-4 shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 print:p-0 print:static print:bg-white">
+          <div
+            id="printable-standee"
+            className="bg-white rounded-3xl p-5 sm:p-8 max-w-sm w-full text-center space-y-4 shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border print:border-brand-beige-dark print:overflow-visible print:p-6"
+          >
             <div className="w-12 h-12 rounded-full bg-brand-beige text-brand-green font-black flex items-center justify-center text-xl mx-auto border border-brand-gold">
               व
             </div>
@@ -633,14 +908,15 @@ export default function TablesPage() {
             <div className="p-6 bg-brand-beige-light rounded-2xl border-2 border-dashed border-brand-green/30 flex flex-col items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                id="standee-modal-qr-img"
                 src={tablesApi.getQrCodeUrl(selectedTable.id, qrBaseUrl)}
                 alt={`Table ${selectedTable.tableNumber} Official QR`}
-                className="w-40 h-40 object-contain rounded-xl bg-white p-2 shadow-xs border border-brand-beige-dark"
+                className="w-40 h-40 object-contain rounded-xl bg-white p-2 shadow-xs border border-brand-beige-dark print:w-44 print:h-44 print:shadow-none"
               />
               <p className="text-xs font-black text-brand-green mt-3 tracking-wider uppercase font-mono">
                 {selectedTable.id} • VAAN VIBES
               </p>
-              <div className="mt-2.5 w-full">
+              <div className="mt-2.5 w-full no-print print:hidden">
                 <a
                   href={buildCustomerMenuUrl({ tableId: selectedTable.id, token: selectedTable.token, customBaseUrl: qrBaseUrl })}
                   target="_blank"
@@ -651,22 +927,33 @@ export default function TablesPage() {
                   <span className="truncate max-w-[260px]">
                     {buildCustomerMenuUrl({ tableId: selectedTable.id, token: selectedTable.token, customBaseUrl: qrBaseUrl })}
                   </span>
-                  <ExternalLink className="w-2.5 h-2.5 shrink-0 text-brand-gold" />
+                  <ExternalLink className="w-2.5 h-2.5 shrink-0 text-brand-gold no-print print:hidden" />
                 </a>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 no-print print:hidden">
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl bg-brand-green text-brand-beige font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                disabled={isPrintingStandee}
+                onClick={handlePrintStandee}
+                className="flex-1 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover disabled:opacity-60 text-brand-beige font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-all active:scale-95"
               >
-                <Printer className="w-3.5 h-3.5 text-brand-gold" />
-                <span>Print Standee</span>
+                {isPrintingStandee ? (
+                  <>
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-brand-gold border-t-transparent animate-spin" />
+                    <span>Preparing Standee...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Print Standee</span>
+                  </>
+                )}
               </button>
               <button
                 type="button"
+                disabled={isPrintingStandee}
                 onClick={() => setSelectedTable(null)}
                 className="py-2.5 px-4 rounded-xl bg-brand-beige hover:bg-brand-beige-dark text-brand-green font-bold text-xs transition-colors cursor-pointer"
               >

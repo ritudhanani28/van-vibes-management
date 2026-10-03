@@ -124,7 +124,9 @@ body {
   }
 
   #printable-receipt,
-  #printable-receipt * {
+  #printable-receipt *,
+  #printable-standee,
+  #printable-standee * {
     visibility: visible !important;
   }
 
@@ -141,6 +143,25 @@ body {
     color: #18312B !important;
     box-shadow: none !important;
     border: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+  }
+
+  #printable-standee {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 400px !important;
+    margin: 0 auto !important;
+    padding: 24px !important;
+    background: #ffffff !important;
+    color: #18312B !important;
+    box-shadow: none !important;
+    border: 2px solid #D8C2A0 !important;
+    border-radius: 24px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     overflow: visible !important;
