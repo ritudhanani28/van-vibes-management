@@ -1,4 +1,5 @@
 'use client';
+import { CAFE_BRAND } from '@/constants/brand';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -526,12 +527,19 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
               {/* Receipt Header */}
               <div className="text-center space-y-1 pb-4 border-b border-dashed border-brand-beige-dark">
                 <div className="text-2xl font-black text-brand-green flex items-center justify-center gap-2">
-                  <span className="font-hindi text-brand-gold">वन VIBES</span>
-                  <span className="tracking-tight font-serif">CAFE</span>
+                  {CAFE_BRAND.hindiName && <span className="font-hindi text-brand-gold">{CAFE_BRAND.hindiName}</span>}
+                  <span className="tracking-tight font-serif">{CAFE_BRAND.name || 'CAFE'}</span>
                 </div>
-                <p className="text-xs text-brand-green/70">Cafe & Restro • Taste the Vibe</p>
-                <p className="text-[11px] text-brand-green/60 font-medium">Main Promenade, Serenita Arts Quarter, Surat, Gujarat</p>
-                <p className="text-[10px] text-brand-green/60 font-mono">Ph: +91 98765 43210</p>
+                {CAFE_BRAND.tagline && <p className="text-xs text-brand-green/70">{CAFE_BRAND.tagline}</p>}
+                {CAFE_BRAND.address && (
+                  <p className="text-[11px] text-brand-green/60 font-medium">{CAFE_BRAND.address}</p>
+                )}
+                {CAFE_BRAND.phone && (
+                  <p className="text-[10px] text-brand-green/60 font-mono">Ph: {CAFE_BRAND.phone}</p>
+                )}
+                {CAFE_BRAND.gstin && (
+                  <p className="text-[10px] text-brand-green/60 font-mono">GSTIN: {CAFE_BRAND.gstin}</p>
+                )}
               </div>
 
               {/* Invoice & Order Metadata */}

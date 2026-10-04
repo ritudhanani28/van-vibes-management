@@ -28,11 +28,12 @@ describe('Design Tokens & Brand Constants', () => {
     expect(DESIGN_TOKENS.radius.full).toBe('9999px');
   });
 
-  it('should define valid cafe brand information', () => {
+  it('should define valid cafe brand information from environment', () => {
     expect(CAFE_BRAND.id).toBe('van-vibes');
-    expect(CAFE_BRAND.name).toBe('Vaan Vibes Cafe & Restro');
+    expect(typeof CAFE_BRAND.name).toBe('string');
     expect(CAFE_BRAND.currency).toBe('₹');
     expect(CAFE_BRAND.taxRate).toBe(0.05);
-    expect(CAFE_BRAND.gstin).toMatch(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$/);
+    expect(typeof CAFE_BRAND.address).toBe('string');
+    expect(typeof CAFE_BRAND.phone).toBe('string');
   });
 });
