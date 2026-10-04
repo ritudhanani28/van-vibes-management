@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/features/orders/components/OrderCard';
 import { BillModal } from '@/features/billing/components/BillModal';
@@ -20,6 +20,8 @@ import {
   Filter,
   Calendar,
   Download,
+  Utensils,
+  X,
 } from 'lucide-react';
 
 export type DateRangeOption = 'today' | 'yesterday' | '30_days' | 'month' | 'year';
@@ -36,6 +38,7 @@ export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [activeFilter, setActiveFilter] = useState<'ALL' | OrderStatus>('ALL');
+  const [tableFilter, setTableFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
   const [selectedBillSessionId, setSelectedBillSessionId] = useState<string | null>(null);
@@ -155,26 +158,68 @@ export default function AdminDashboardPage() {
     .filter((o) => o.paymentStatus === 'PAID')
     .reduce((sum, o) => sum + (o.total || 0), 0);
 
-  // Filtered orders
-  const filteredOrders = orders.filter((order) => {
-    if (activeFilter !== 'ALL') {
-      if (activeFilter === 'PLACED') {
-        if (order.status !== 'PLACED' && order.status !== 'ORDER_PLACED') return false;
-      } else if (order.status !== activeFilter) {
-        return false;
+  // Extract unique table numbers dynamically from tables and orders
+  const uniqueTables = useMemo(() => {
+    const tableSet = new Set<number>();
+    tables.forEach((t) => {
+      if (typeof t.tableNumber === 'number') {
+        tableSet.add(t.tableNumber);
       }
-    }
+    });
+    orders.forEach((o) => {
+      if (typeof o.tableNumber === 'number') {
+        tableSet.add(o.tableNumber);
+      }
+    });
+    return Array.from(tableSet).sort((a, b) => a - b);
+  }, [tables, orders]);
 
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return (
-      order.id.toLowerCase().includes(q) ||
-      (order.customerName && order.customerName.toLowerCase().includes(q)) ||
-      (order.customerMobile && order.customerMobile.includes(q)) ||
-      (order.tableNumber && `table ${order.tableNumber}`.includes(q)) ||
-      (order.items && order.items.some((i) => i.name.toLowerCase().includes(q)))
-    );
-  });
+  const tableOptions = useMemo(
+    () => [
+      { value: 'ALL', label: 'All Tables' },
+      ...uniqueTables.map((tblNum) => ({
+        value: tblNum.toString(),
+        label: `Table ${tblNum.toString().padStart(2, '0')}`,
+      })),
+    ],
+    [uniqueTables]
+  );
+
+  // Filtered orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      if (activeFilter !== 'ALL') {
+        if (activeFilter === 'PLACED') {
+          if (order.status !== 'PLACED' && order.status !== 'ORDER_PLACED') return false;
+        } else if (order.status !== activeFilter) {
+          return false;
+        }
+      }
+
+      if (tableFilter !== 'ALL') {
+        if (order.tableNumber.toString() !== tableFilter) return false;
+      }
+
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        order.id.toLowerCase().includes(q) ||
+        (order.customerName && order.customerName.toLowerCase().includes(q)) ||
+        (order.customerMobile && order.customerMobile.includes(q)) ||
+        (order.tableNumber && `table ${order.tableNumber}`.includes(q)) ||
+        (order.items && order.items.some((i) => i.name.toLowerCase().includes(q)))
+      );
+    });
+  }, [orders, activeFilter, tableFilter, searchQuery]);
+
+  const hasActiveFilters =
+    activeFilter !== 'ALL' || tableFilter !== 'ALL' || searchQuery.trim() !== '';
+
+  const handleResetFilters = () => {
+    setActiveFilter('ALL');
+    setTableFilter('ALL');
+    setSearchQuery('');
+  };
 
   const getRangeLabel = () => {
     const match = DATE_RANGE_OPTIONS.find((opt) => opt.value === dateRange);
@@ -270,10 +315,10 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Filter Pills & Search Bar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-2">
+        {/* Filter Pills, Table Filter & Search Bar */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2">
           {/* Status Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
             {(
               [
                 { label: 'All Orders', value: 'ALL' },
@@ -315,16 +360,44 @@ export default function AdminDashboardPage() {
             })}
           </div>
 
-          {/* Search Box */}
-          <div className="relative min-w-[240px]">
-            <Search className="w-4 h-4 text-brand-green/40 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search ID, customer, table, dish..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+          {/* Right Controls: Table Filter Dropdown & Search Box */}
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            {/* Table Filter Dropdown */}
+            <CustomSelect
+              value={tableFilter}
+              onChange={(val) => setTableFilter(val)}
+              options={tableOptions}
+              icon={<Utensils className="w-3.5 h-3.5 text-brand-green/60 shrink-0" />}
+              className="w-full xs:w-36 sm:w-40"
+              buttonClassName="py-2 px-3 text-xs"
+              placeholder="All Tables"
+              ariaLabel="Filter orders by table"
             />
+
+            {/* Search Box */}
+            <div className="relative flex-1 sm:w-60 min-w-[200px]">
+              <Search className="w-4 h-4 text-brand-green/40 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search ID, customer, table, dish..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-brand-beige-dark text-xs text-brand-green placeholder:text-brand-green/40 focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+              />
+            </div>
+
+            {/* Reset Filters Quick Button */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="p-2 text-brand-green/60 hover:text-brand-green bg-white hover:bg-brand-beige border border-brand-beige-dark rounded-xl transition-colors cursor-pointer shrink-0"
+                title="Reset filters"
+                aria-label="Reset filters"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -337,9 +410,19 @@ export default function AdminDashboardPage() {
           </div>
 
           {filteredOrders.length === 0 ? (
-            <div className="py-12 bg-white rounded-2xl border border-brand-beige-dark text-center space-y-2">
+            <div className="py-12 bg-white rounded-2xl border border-brand-beige-dark text-center space-y-3">
               <Filter className="w-8 h-8 text-brand-green/30 mx-auto" />
               <p className="text-xs font-bold text-brand-green/60">No orders match the current filter</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green text-brand-beige text-xs font-bold hover:bg-brand-green-hover transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Clear Filters</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

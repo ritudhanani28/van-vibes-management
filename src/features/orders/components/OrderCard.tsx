@@ -72,12 +72,23 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   };
 
   const badge = getStatusBadge(order.status);
+  // Status check for completed or finalized orders (no relative time for completed/served/cancelled)
+  const isCompleted =
+    order.status === 'COMPLETED' ||
+    order.status === 'SERVED' ||
+    order.status === 'CANCELLED';
+
   const orderDate = new Date(order.createdAt);
   const formattedTime = !isNaN(orderDate.getTime())
     ? orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
   useEffect(() => {
+    // If order is completed or served, do not track or display relative elapsed time
+    if (isCompleted) {
+      setElapsedMinutes(0);
+      return;
+    }
     const updateElapsed = () => {
       const orderTime = new Date(order.createdAt).getTime();
       if (!isNaN(orderTime)) {
@@ -87,7 +98,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
     updateElapsed();
     const interval = setInterval(updateElapsed, 30000);
     return () => clearInterval(interval);
-  }, [order.createdAt]);
+  }, [order.createdAt, isCompleted]);
 
   // Item counts & unit calculations
   const totalUnits = order.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -178,7 +189,7 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
               <Clock className="w-3 h-3 text-brand-green/50" />
               {formattedTime}
             </span>
-            {elapsedMinutes > 0 && (
+            {!isCompleted && elapsedMinutes > 0 && (
               <>
                 <span>•</span>
                 <span

@@ -120,6 +120,17 @@ export default function ChefManagementPage() {
     setIsAddModalOpen(true);
   };
 
+  // Close Add Chef Modal and reset all fields
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+    setAddName('');
+    setAddEmail('');
+    setAddContact('');
+    setAddRole('CHEF');
+    setAddPassword('');
+    setAddError(null);
+  };
+
   // Handle Add Chef Submission
   const handleAddChef = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +181,12 @@ export default function ChefManagementPage() {
 
       setChefs((prev) => [newChef, ...prev]);
       showSuccessBanner(`Chef "${newChef.name}" account created successfully.`);
+      setAddName('');
+      setAddEmail('');
+      setAddContact('');
+      setAddRole('CHEF');
+      setAddPassword('');
+      setAddError(null);
       setIsAddModalOpen(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create chef account. Email may already be registered.';
@@ -463,7 +480,7 @@ export default function ChefManagementPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={handleCloseAddModal}
                 className="p-1.5 rounded-xl hover:bg-brand-beige text-brand-green/50 hover:text-brand-green transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -479,7 +496,31 @@ export default function ChefManagementPage() {
             )}
 
             {/* Form */}
-            <form onSubmit={handleAddChef} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+            <form
+              onSubmit={handleAddChef}
+              autoComplete="off"
+              className="p-5 space-y-4 overflow-y-auto flex-1 text-xs"
+            >
+              {/* Dummy hidden inputs to absorb aggressive browser credential autofill */}
+              <input
+                type="text"
+                name="fake_username_autofill"
+                id="fake_username_autofill"
+                style={{ display: 'none' }}
+                tabIndex={-1}
+                aria-hidden="true"
+                autoComplete="off"
+              />
+              <input
+                type="password"
+                name="fake_password_autofill"
+                id="fake_password_autofill"
+                style={{ display: 'none' }}
+                tabIndex={-1}
+                aria-hidden="true"
+                autoComplete="new-password"
+              />
+
               {/* Name */}
               <div className="space-y-1">
                 <label className="font-bold text-brand-green flex items-center gap-1">
@@ -488,6 +529,9 @@ export default function ChefManagementPage() {
                 </label>
                 <input
                   type="text"
+                  name="chef_full_name"
+                  id="chef_full_name"
+                  autoComplete="off"
                   required
                   placeholder="e.g. Ramesh Chef"
                   value={addName}
@@ -505,6 +549,11 @@ export default function ChefManagementPage() {
                 </label>
                 <input
                   type="email"
+                  name="chef_email_address"
+                  id="chef_email_address"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
                   required
                   placeholder="chef@vaanvibes.in"
                   value={addEmail}
@@ -525,6 +574,9 @@ export default function ChefManagementPage() {
                 </div>
                 <input
                   type="text"
+                  name="chef_phone_contact"
+                  id="chef_phone_contact"
+                  autoComplete="off"
                   inputMode="numeric"
                   pattern="[0-9]{10}"
                   maxLength={10}
@@ -564,6 +616,10 @@ export default function ChefManagementPage() {
                 </div>
                 <input
                   type="password"
+                  name="chef_account_password"
+                  id="chef_account_password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
                   required
                   placeholder="••••••••"
                   value={addPassword}
@@ -580,7 +636,7 @@ export default function ChefManagementPage() {
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-beige-dark mt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={handleCloseAddModal}
                   disabled={isAdding}
                   className="px-4 py-2.5 rounded-xl border border-brand-beige-dark font-bold text-brand-green/70 hover:bg-brand-beige transition-colors cursor-pointer"
                 >
@@ -647,7 +703,7 @@ export default function ChefManagementPage() {
             )}
 
             {/* Form */}
-            <form onSubmit={handleSaveEditChef} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+            <form onSubmit={handleSaveEditChef} autoComplete="off" className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* Name */}
               <div className="space-y-1">
                 <label className="font-bold text-brand-green flex items-center gap-1">

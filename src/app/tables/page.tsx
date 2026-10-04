@@ -18,10 +18,6 @@ import {
   ArrowRightLeft,
   CheckCircle2,
   Users,
-  Globe,
-  Wifi,
-  Laptop,
-  RotateCcw,
 } from 'lucide-react';
 import {
   buildCustomerMenuUrl,
@@ -36,10 +32,6 @@ export default function TablesPage() {
 
   // Dynamic QR Target Base URL State
   const [qrBaseUrl, setQrBaseUrl] = useState<string>(() => getCustomerFrontendBaseUrl());
-  const [serverLanIp, setServerLanIp] = useState<string | null>(null);
-  const [customerPort, setCustomerPort] = useState<number>(4000);
-  const [isQrSettingsOpen, setIsQrSettingsOpen] = useState(false);
-  const [customQrInput, setCustomQrInput] = useState('');
 
   // Swipe Table Modal State
   const [isSwipeModalOpen, setIsSwipeModalOpen] = useState(false);
@@ -377,9 +369,7 @@ export default function TablesPage() {
   }, []);
 
   useEffect(() => {
-    fetchServerNetworkInfo().then((info) => {
-      if (info.lanIp) setServerLanIp(info.lanIp);
-      if (info.customerPort) setCustomerPort(info.customerPort);
+    fetchServerNetworkInfo().then(() => {
       setQrBaseUrl(getCustomerFrontendBaseUrl());
     });
   }, []);
@@ -603,24 +593,8 @@ export default function TablesPage() {
             </p>
           </div>
 
-          {/* Action Buttons: QR Target Origin, Add Table & Swipe Table */}
+          {/* Action Buttons: Add Table & Swipe Table */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                setCustomQrInput(qrBaseUrl);
-                setIsQrSettingsOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white hover:bg-brand-beige-light text-brand-green text-xs font-bold border border-brand-beige-dark transition-all shadow-2xs active:scale-95 cursor-pointer"
-              title="Configure Dynamic QR Target URL"
-            >
-              <Globe className="w-3.5 h-3.5 text-brand-gold shrink-0" />
-              <span className="hidden sm:inline text-brand-green/70">QR Target:</span>
-              <span className="font-mono text-[11px] text-brand-green font-extrabold truncate max-w-[170px]">
-                {qrBaseUrl.replace(/^https?:\/\//, '')}
-              </span>
-            </button>
-
             <button
               type="button"
               onClick={() => {
@@ -1184,151 +1158,6 @@ export default function TablesPage() {
         </div>
       )}
 
-      {/* QR Target Origin Configuration Modal */}
-      {isQrSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div
-            className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full space-y-4 shadow-2xl border border-brand-beige-dark animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-brand-beige-dark/60">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-green font-black">
-                  <Globe className="w-4 h-4 text-brand-gold" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-brand-green">QR Target Origin</h3>
-                  <p className="text-[11px] text-brand-green/60">Dynamic customer menu URL resolution</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsQrSettingsOpen(false)}
-                className="p-1 rounded-full text-brand-green/60 hover:text-brand-green hover:bg-brand-beige-light transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-brand-green/80 leading-relaxed">
-              Choose the network origin encoded into generated QR codes, Standees, and Copy Link. All entry points update immediately.
-            </p>
-
-            {/* Preset Options */}
-            <div className="space-y-2">
-              {serverLanIp && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const lanUrl = `http://${serverLanIp}:${customerPort}`;
-                    setCustomQrInput(lanUrl);
-                  }}
-                  className={`w-full p-3 rounded-2xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
-                    customQrInput.includes(serverLanIp)
-                      ? 'border-brand-green bg-brand-green/5 ring-1 ring-brand-green/30'
-                      : 'border-brand-beige-dark hover:bg-brand-beige-light/50'
-                  }`}
-                >
-                  <Wifi className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-brand-green">Local Wi-Fi Network (LAN)</span>
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                        Recommended for Phone Scans
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-mono text-brand-green/70 truncate mt-0.5">
-                      http://{serverLanIp}:{customerPort}
-                    </p>
-                  </div>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomQrInput(`http://localhost:${customerPort}`);
-                }}
-                className={`w-full p-3 rounded-2xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
-                  customQrInput.includes('localhost')
-                    ? 'border-brand-green bg-brand-green/5 ring-1 ring-brand-green/30'
-                    : 'border-brand-beige-dark hover:bg-brand-beige-light/50'
-                }`}
-              >
-                <Laptop className="w-4 h-4 text-brand-green/70 mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-xs font-bold text-brand-green block">Localhost (Computer Only)</span>
-                  <p className="text-[11px] font-mono text-brand-green/70 truncate mt-0.5">
-                    http://localhost:{customerPort}
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            {/* Custom URL Input */}
-            <div className="space-y-1.5 pt-1">
-              <label className="text-xs font-bold text-brand-green block">
-                Target Customer Base URL:
-              </label>
-              <input
-                type="text"
-                value={customQrInput}
-                onChange={(e) => setCustomQrInput(e.target.value)}
-                placeholder="https://your-domain.com or http://IP:PORT"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs font-mono text-brand-green bg-brand-beige-light/30 focus:outline-none focus:ring-2 focus:ring-brand-green/20"
-              />
-              <p className="text-[10px] text-brand-green/60">
-                Menu path <span className="font-mono">/cafe/van-vibes/menu?table=...</span> will be appended automatically.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-brand-beige-dark/60">
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    localStorage.removeItem('vv_qr_base_override');
-                  } catch {}
-                  const defaultBase = getCustomerFrontendBaseUrl({ customOverride: null });
-                  setQrBaseUrl(defaultBase);
-                  setCustomQrInput(defaultBase);
-                  setIsQrSettingsOpen(false);
-                }}
-                className="text-xs font-bold text-brand-green/70 hover:text-brand-green flex items-center gap-1 transition-colors"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Reset to Auto</span>
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsQrSettingsOpen(false)}
-                  className="px-3.5 py-2 rounded-xl bg-brand-beige-light hover:bg-brand-beige text-brand-green font-bold text-xs transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const clean = customQrInput.trim().replace(/\/+$/, '');
-                    if (clean) {
-                      try {
-                        localStorage.setItem('vv_qr_base_override', clean);
-                      } catch {}
-                      setQrBaseUrl(clean);
-                    }
-                    setIsQrSettingsOpen(false);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs shadow-xs transition-all active:scale-95"
-                >
-                  Apply Target
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </AppLayout>
   );
 }
