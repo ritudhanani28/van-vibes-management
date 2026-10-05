@@ -181,6 +181,46 @@ body {
     border: none !important;
     padding: 0 !important;
   }
+
+  .bill-print-logo-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    margin: 0 auto 8px auto !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+
+  .bill-print-logo {
+    display: block !important;
+    margin: 0 auto !important;
+    max-height: 85px !important;
+    height: 85px !important;
+    width: auto !important;
+    max-width: 190px !important;
+    object-fit: contain !important;
+    background: transparent !important;
+  }
+}
+
+.bill-print-logo-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  margin: 0 auto 6px auto;
+  width: 100%;
+}
+
+.bill-print-logo {
+  display: block;
+  margin: 0 auto;
+  max-height: 85px;
+  width: auto;
+  max-width: 190px;
+  object-fit: contain;
+  background: transparent;
 }
 
 /* Accessibility: Respect reduced-motion preferences */

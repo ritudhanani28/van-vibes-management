@@ -27,7 +27,13 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   const [isUpdating, setIsUpdating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
-  const [elapsedMinutes, setElapsedMinutes] = useState(0);
+  const [elapsedMinutes, setElapsedMinutes] = useState(() => {
+    if (order.status === 'COMPLETED' || order.status === 'SERVED' || order.status === 'CANCELLED') {
+      return 0;
+    }
+    const orderTime = new Date(order.createdAt).getTime();
+    return !isNaN(orderTime) ? Math.max(0, Math.floor((Date.now() - orderTime) / (1000 * 60))) : 0;
+  });
 
   // Status Badge Configuration
   const getStatusBadge = (status: OrderStatus) => {
@@ -86,7 +92,6 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   useEffect(() => {
     // If order is completed or served, do not track or display relative elapsed time
     if (isCompleted) {
-      setElapsedMinutes(0);
       return;
     }
     const updateElapsed = () => {

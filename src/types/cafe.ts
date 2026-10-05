@@ -137,6 +137,8 @@ export interface CafeDetails {
   gstin: string;
   currency: string;
   taxRate: number; // 0.05
+  logoUrl?: string;
+  logoDataUrl?: string;
 }
 
 export interface IncompleteOrderItem {

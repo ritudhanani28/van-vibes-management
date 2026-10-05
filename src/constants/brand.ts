@@ -2,6 +2,7 @@
  * Vaan Vibes Management Portal — Brand & Organization Constants
  */
 import { CafeDetails } from "@/types/cafe";
+import { VAN_VIBES_LOGO_DATA_URL, VAN_VIBES_LOGO_PATH } from "./logo";
 
 const morningHours = process.env.NEXT_PUBLIC_CAFE_MORNING_HOURS || '';
 const breakHours = process.env.NEXT_PUBLIC_CAFE_BREAK_HOURS || '';
@@ -29,6 +30,8 @@ export const CAFE_BRAND: CafeDetails & {
   gstin: process.env.NEXT_PUBLIC_CAFE_GSTIN || '',
   currency: process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '₹',
   taxRate: process.env.NEXT_PUBLIC_TAX_RATE ? parseFloat(process.env.NEXT_PUBLIC_TAX_RATE) : 0.05,
+  logoUrl: VAN_VIBES_LOGO_PATH,
+  logoDataUrl: VAN_VIBES_LOGO_DATA_URL,
   operatingHours: cafeHours,
   schedule: {
     morning: morningHours,

@@ -1,5 +1,6 @@
 'use client';
 import { CAFE_BRAND } from '@/constants/brand';
+import { VAN_VIBES_LOGO_DATA_URL } from '@/constants/logo';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -328,6 +329,7 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <base href="${window.location.origin}" />
           <title>${billTitle}</title>
           ${stylesHtml}
           <style>
@@ -367,6 +369,25 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
               overflow: visible !important;
               height: auto !important;
               max-height: none !important;
+            }
+            .bill-print-logo-container {
+              display: flex !important;
+              justify-content: center !important;
+              align-items: center !important;
+              text-align: center !important;
+              margin: 0 auto 8px auto !important;
+              width: 100% !important;
+              background: transparent !important;
+            }
+            .bill-print-logo {
+              display: block !important;
+              margin: 0 auto !important;
+              max-height: 85px !important;
+              height: 85px !important;
+              width: auto !important;
+              max-width: 190px !important;
+              object-fit: contain !important;
+              background: transparent !important;
             }
           </style>
         </head>
@@ -526,11 +547,16 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
 
               {/* Receipt Header */}
               <div className="text-center space-y-1 pb-4 border-b border-dashed border-brand-beige-dark">
-                <div className="text-2xl font-black text-brand-green flex items-center justify-center gap-2">
-                  {CAFE_BRAND.hindiName && <span className="font-hindi text-brand-gold">{CAFE_BRAND.hindiName}</span>}
-                  <span className="tracking-tight font-serif">{CAFE_BRAND.name || 'CAFE'}</span>
+                {/* Official Cafe Brand Logo (Without background, top middle of the bill) */}
+                <div className="bill-print-logo-container flex justify-center items-center pb-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={VAN_VIBES_LOGO_DATA_URL}
+                    alt="वन VIBES RESTRO & CAFÉ"
+                    className="bill-print-logo h-20 sm:h-24 w-auto max-w-[190px] object-contain mx-auto"
+                  />
                 </div>
-                {CAFE_BRAND.tagline && <p className="text-xs text-brand-green/70">{CAFE_BRAND.tagline}</p>}
+
                 {CAFE_BRAND.address && (
                   <p className="text-[11px] text-brand-green/60 font-medium">{CAFE_BRAND.address}</p>
                 )}
