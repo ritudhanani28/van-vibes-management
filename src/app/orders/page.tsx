@@ -5,13 +5,14 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/features/orders/components/OrderCard';
 import { BillModal } from '@/features/billing/components/BillModal';
 import { CustomSelect } from '@/components/ui/CustomSelect';
-import { Order, OrderStatus } from '@/types/cafe';
+import { Order, OrderStatus, ActivityFilterOption, isOrderActive, isOrderInactive } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import { useAuth } from '@/context/AuthContext';
 import {
   Search,
   ShoppingBag,
+  Activity,
   Loader2,
   AlertCircle,
   Filter,
@@ -41,6 +42,9 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Activity filter: 'ACTIVE' (default), 'ALL', or 'INACTIVE'
+  const [activityFilter, setActivityFilter] = useState<ActivityFilterOption>('ACTIVE');
+
   // Filters default to ALL (no selected filter initially)
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilterOption>('ALL');
@@ -50,6 +54,11 @@ export default function OrdersPage() {
 
   const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
   const [selectedBillSessionId, setSelectedBillSessionId] = useState<string | null>(null);
+
+  // Authoritative Activity Counts
+  const activeCount = useMemo(() => orders.filter((o) => isOrderActive(o)).length, [orders]);
+  const inactiveCount = useMemo(() => orders.filter((o) => isOrderInactive(o)).length, [orders]);
+  const allCount = orders.length;
 
   const loadOrders = useCallback(async () => {
     try {
@@ -105,7 +114,18 @@ export default function OrdersPage() {
       const upd = data.updatedAt || data.updated_at || new Date().toISOString();
       if (!id) return;
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: st, updatedAt: upd } : o))
+        prev.map((o) => {
+          if (o.id === id) {
+            const updated = { ...o, status: st, updatedAt: upd };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
       );
     };
 
@@ -116,12 +136,65 @@ export default function OrdersPage() {
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
     const unsubTransferred = wsManager.on('TABLE_TRANSFERRED', () => loadOrders());
 
-    // Real-time: Listen for payment settlement
-    const handlePaymentSettled = (data: { orderId?: string; order_id?: string }) => {
-      const id = data.orderId || data.order_id;
-      if (!id) return;
+    // Real-time: Listen for bill generation
+    const handleBillGenerated = (data: {
+      tableId?: string;
+      table_id?: string;
+      sessionId?: string;
+      session_id?: string;
+    }) => {
+      const sessId = data?.sessionId || data?.session_id;
+      const tblId = data?.tableId || data?.table_id;
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, paymentStatus: 'PAID' } : o))
+        prev.map((o) => {
+          if ((sessId && o.diningSessionId === sessId) || (tblId && o.tableId === tblId)) {
+            const updated = {
+              ...o,
+              billGenerated: true,
+              sessionStatus: 'BILL_GENERATED' as const,
+            };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
+      );
+    };
+    const unsubBill = wsManager.on('BILL_GENERATED', handleBillGenerated);
+
+    // Real-time: Listen for payment settlement
+    const handlePaymentSettled = (data: {
+      orderId?: string;
+      order_id?: string;
+      sessionId?: string;
+      session_id?: string;
+      tableId?: string;
+      table_id?: string;
+    }) => {
+      const id = data?.orderId || data?.order_id;
+      const sessId = data?.sessionId || data?.session_id;
+      const tblId = data?.tableId || data?.table_id;
+      setOrders((prev) =>
+        prev.map((o) => {
+          if ((id && o.id === id) || (sessId && o.diningSessionId === sessId) || (tblId && o.tableId === tblId)) {
+            const updated = {
+              ...o,
+              paymentStatus: 'PAID' as const,
+              billGenerated: true,
+            };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
       );
     };
     const unsubPayment = wsManager.on('PAYMENT_SETTLED', handlePaymentSettled);
@@ -139,6 +212,7 @@ export default function OrdersPage() {
       unsubCompleted();
       unsubUpdated();
       unsubTransferred();
+      unsubBill();
       unsubPayment();
     };
   }, [loadOrders]);
@@ -222,6 +296,13 @@ export default function OrdersPage() {
   // Composable Filter Evaluation
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
+      // 0. Activity Filter (Default: ACTIVE)
+      if (activityFilter === 'ACTIVE') {
+        if (isOrderInactive(order)) return false;
+      } else if (activityFilter === 'INACTIVE') {
+        if (!isOrderInactive(order)) return false;
+      }
+
       // 1. Status Filter
       if (statusFilter !== 'ALL') {
         if (statusFilter === 'PLACED') {
@@ -261,10 +342,11 @@ export default function OrdersPage() {
 
       return true;
     });
-  }, [orders, statusFilter, dateFilter, tableFilter, paymentFilter, searchQuery, isChef]);
+  }, [orders, activityFilter, statusFilter, dateFilter, tableFilter, paymentFilter, searchQuery, isChef]);
 
   // Check if any filter is actively applied
   const hasActiveFilters =
+    activityFilter !== 'ACTIVE' ||
     statusFilter !== 'ALL' ||
     dateFilter !== 'ALL' ||
     tableFilter !== 'ALL' ||
@@ -272,6 +354,7 @@ export default function OrdersPage() {
     searchQuery.trim() !== '';
 
   const handleResetFilters = () => {
+    setActivityFilter('ACTIVE');
     setStatusFilter('ALL');
     setDateFilter('ALL');
     setTableFilter('ALL');
@@ -280,6 +363,12 @@ export default function OrdersPage() {
   };
 
   // CustomSelect Options Definitions
+  const activityOptions = [
+    { value: 'ACTIVE', label: `Active (${activeCount})` },
+    { value: 'ALL', label: `All Orders (${allCount})` },
+    { value: 'INACTIVE', label: `Inactive (${inactiveCount})` },
+  ];
+
   const statusOptions = [
     { value: 'ALL', label: `All Orders (${orders.length})` },
     {
@@ -350,7 +439,7 @@ export default function OrdersPage() {
   return (
     <AppLayout requiredRole="ADMIN">
       <div className="space-y-5 sm:space-y-6">
-        {/* Top Header */}
+        {/* Top Header with 3-State Activity Dropdown */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -366,6 +455,98 @@ export default function OrdersPage() {
                 ? 'Operational live tickets for food preparation (Pricing strictly excluded)'
                 : 'Monitor real-time tickets, advance preparation workflow, and finalize billing.'}
             </p>
+          </div>
+
+          {/* 3-State Activity Selector Dropdown */}
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <CustomSelect
+              value={activityFilter}
+              onChange={(val) => setActivityFilter(val as ActivityFilterOption)}
+              options={activityOptions}
+              icon={<Activity className="w-3.5 h-3.5 text-brand-green/70 shrink-0" />}
+              className="w-full sm:w-48"
+              buttonClassName="py-2 px-3 text-xs font-black shadow-2xs border-brand-green/20"
+              placeholder="Active Orders"
+              ariaLabel="Filter orders by activity"
+            />
+          </div>
+        </div>
+
+        {/* 3-State Segmented Control bar: Active / All / Inactive */}
+        <div className="flex items-center justify-between gap-3 flex-wrap border-b border-brand-beige-dark/60 pb-3">
+          <div className="flex items-center p-1 rounded-2xl bg-white border border-brand-beige-dark shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActivityFilter('ACTIVE')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activityFilter === 'ACTIVE'
+                  ? 'bg-brand-green text-brand-beige shadow-xs'
+                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+              }`}
+            >
+              <span>Active</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  activityFilter === 'ACTIVE'
+                    ? 'bg-brand-beige text-brand-green font-black'
+                    : 'bg-brand-beige-light text-brand-green/70'
+                }`}
+              >
+                {activeCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActivityFilter('ALL')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activityFilter === 'ALL'
+                  ? 'bg-brand-green text-brand-beige shadow-xs'
+                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+              }`}
+            >
+              <span>All</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  activityFilter === 'ALL'
+                    ? 'bg-brand-beige text-brand-green font-black'
+                    : 'bg-brand-beige-light text-brand-green/70'
+                }`}
+              >
+                {allCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActivityFilter('INACTIVE')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activityFilter === 'INACTIVE'
+                  ? 'bg-brand-green text-brand-beige shadow-xs'
+                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+              }`}
+            >
+              <span>Inactive</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  activityFilter === 'INACTIVE'
+                    ? 'bg-brand-beige text-brand-green font-black'
+                    : 'bg-brand-beige-light text-brand-green/70'
+                }`}
+              >
+                {inactiveCount}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-brand-green/60 font-medium">
+            Showing <strong className="text-brand-green font-bold">{filteredOrders.length}</strong> of{' '}
+            {activityFilter === 'ACTIVE'
+              ? `${activeCount} active`
+              : activityFilter === 'INACTIVE'
+              ? `${inactiveCount} inactive`
+              : `${allCount} total`}{' '}
+            orders
           </div>
         </div>
 

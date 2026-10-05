@@ -7,7 +7,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/features/orders/components/OrderCard';
 import { BillModal } from '@/features/billing/components/BillModal';
 import { CustomSelect } from '@/components/ui/CustomSelect';
-import { Order, OrderStatus, TableInfo } from '@/types/cafe';
+import { ActivityFilterOption, isOrderActive, isOrderInactive, Order, OrderStatus, TableInfo } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
 import { tablesApi } from '@/api/tables';
 import { wsManager } from '@/services/websocket/WebSocketManager';
@@ -25,6 +25,7 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
+  Activity,
 } from 'lucide-react';
 
 export type DateRangeOption = 'today' | 'yesterday' | '30_days' | 'month' | 'year';
@@ -40,6 +41,7 @@ const DATE_RANGE_OPTIONS: { label: string; value: DateRangeOption }[] = [
 export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<TableInfo[]>([]);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilterOption>('ACTIVE');
   const [activeFilter, setActiveFilter] = useState<'ALL' | OrderStatus>('ALL');
   const [tableFilter, setTableFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,20 +114,89 @@ export default function AdminDashboardPage() {
       const upd = data.updatedAt || data.updated_at || new Date().toISOString();
       if (!id) return;
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: st, updatedAt: upd } : o))
+        prev.map((o) => {
+          if (o.id === id) {
+            const updated = { ...o, status: st, updatedAt: upd };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
       );
     };
 
     const unsubAccepted = wsManager.on('ORDER_ACCEPTED', handleStatusTransition);
+    const unsubInKitchen = wsManager.on('ORDER_IN_KITCHEN', handleStatusTransition);
     const unsubServed = wsManager.on('ORDER_SERVED', handleStatusTransition);
     const unsubCompleted = wsManager.on('ORDER_COMPLETED', handleStatusTransition);
     const unsubUpdated = wsManager.on('ORDER_STATUS_UPDATED', handleStatusTransition);
 
-    const unsubPay = wsManager.on('PAYMENT_SETTLED', (data: { orderId: string }) => {
+    // Real-time: Listen for bill generation
+    const handleBillGenerated = (data: {
+      tableId?: string;
+      table_id?: string;
+      sessionId?: string;
+      session_id?: string;
+    }) => {
+      const sessId = data?.sessionId || data?.session_id;
+      const tblId = data?.tableId || data?.table_id;
       setOrders((prev) =>
-        prev.map((o) => (o.id === data.orderId ? { ...o, paymentStatus: 'PAID' } : o))
+        prev.map((o) => {
+          if ((sessId && o.diningSessionId === sessId) || (tblId && o.tableId === tblId)) {
+            const updated = {
+              ...o,
+              billGenerated: true,
+              sessionStatus: 'BILL_GENERATED' as const,
+            };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
       );
-    });
+    };
+    const unsubBill = wsManager.on('BILL_GENERATED', handleBillGenerated);
+
+    // Real-time: Listen for payment settlement
+    const handlePaymentSettled = (data: {
+      orderId?: string;
+      order_id?: string;
+      sessionId?: string;
+      session_id?: string;
+      tableId?: string;
+      table_id?: string;
+    }) => {
+      const id = data?.orderId || data?.order_id;
+      const sessId = data?.sessionId || data?.session_id;
+      const tblId = data?.tableId || data?.table_id;
+      setOrders((prev) =>
+        prev.map((o) => {
+          if ((id && o.id === id) || (sessId && o.diningSessionId === sessId) || (tblId && o.tableId === tblId)) {
+            const updated = {
+              ...o,
+              paymentStatus: 'PAID' as const,
+              billGenerated: true,
+            };
+            const active = isOrderActive(updated);
+            return {
+              ...updated,
+              activityStatus: active ? 'ACTIVE' : 'INACTIVE',
+              isActive: active,
+            };
+          }
+          return o;
+        })
+      );
+    };
+    const unsubPay = wsManager.on('PAYMENT_SETTLED', handlePaymentSettled);
 
     const unsubTbl = wsManager.on('TABLE_STATUS_UPDATED', (data: { tableId: string; status: TableInfo['status'] }) => {
       setTables((prev) =>
@@ -143,9 +214,11 @@ export default function AdminDashboardPage() {
       unsubPlaced();
       unsubCreated();
       unsubAccepted();
+      unsubInKitchen();
       unsubServed();
       unsubCompleted();
       unsubUpdated();
+      unsubBill();
       unsubPay();
       unsubTbl();
     };
@@ -166,6 +239,20 @@ export default function AdminDashboardPage() {
     }
     loadData(dateRange);
   };
+
+  // Activity Counts
+  const activeCount = useMemo(() => orders.filter((o) => isOrderActive(o)).length, [orders]);
+  const inactiveCount = useMemo(() => orders.filter((o) => isOrderInactive(o)).length, [orders]);
+  const allCount = orders.length;
+
+  const activityOptions = useMemo(
+    () => [
+      { value: 'ACTIVE', label: `Active (${activeCount})` },
+      { value: 'ALL', label: `All Orders (${allCount})` },
+      { value: 'INACTIVE', label: `Inactive (${inactiveCount})` },
+    ],
+    [activeCount, allCount, inactiveCount]
+  );
 
   // KPIs calculated live from filtered state
   const totalOrders = orders.length;
@@ -204,9 +291,17 @@ export default function AdminDashboardPage() {
     [uniqueTables]
   );
 
-  // Filtered orders
+  // Filtered orders with Activity, Status, Table, and Search
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
+      // 0. Activity Filter (Default: ACTIVE)
+      if (activityFilter === 'ACTIVE') {
+        if (isOrderInactive(order)) return false;
+      } else if (activityFilter === 'INACTIVE') {
+        if (!isOrderInactive(order)) return false;
+      }
+
+      // 1. Status Filter
       if (activeFilter !== 'ALL') {
         if (activeFilter === 'PLACED') {
           if (order.status !== 'PLACED' && order.status !== 'ORDER_PLACED') return false;
@@ -215,10 +310,12 @@ export default function AdminDashboardPage() {
         }
       }
 
+      // 2. Table Filter
       if (tableFilter !== 'ALL') {
         if (order.tableNumber.toString() !== tableFilter) return false;
       }
 
+      // 3. Search Query
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase().trim();
       return (
@@ -229,12 +326,16 @@ export default function AdminDashboardPage() {
         (order.items && order.items.some((i) => i.name.toLowerCase().includes(q)))
       );
     });
-  }, [orders, activeFilter, tableFilter, searchQuery]);
+  }, [orders, activityFilter, activeFilter, tableFilter, searchQuery]);
 
   const hasActiveFilters =
-    activeFilter !== 'ALL' || tableFilter !== 'ALL' || searchQuery.trim() !== '';
+    activityFilter !== 'ACTIVE' ||
+    activeFilter !== 'ALL' ||
+    tableFilter !== 'ALL' ||
+    searchQuery.trim() !== '';
 
   const handleResetFilters = () => {
+    setActivityFilter('ACTIVE');
     setActiveFilter('ALL');
     setTableFilter('ALL');
     setSearchQuery('');
@@ -259,8 +360,17 @@ export default function AdminDashboardPage() {
             </p>
           </div>
 
-          {/* Actions: Date Filter & Export Data */}
+          {/* Actions: Activity Filter, Date Filter & Export Data */}
           <div className="flex items-center gap-2.5 flex-wrap">
+            <CustomSelect
+              value={activityFilter}
+              onChange={(val) => setActivityFilter(val as ActivityFilterOption)}
+              options={activityOptions}
+              icon={<Activity className="w-3.5 h-3.5 text-brand-green/70 shrink-0" />}
+              className="w-40 sm:w-44"
+              buttonClassName="py-2 px-3 shadow-2xs font-bold text-xs"
+              ariaLabel="Filter orders by activity"
+            />
             <CustomSelect
               value={dateRange}
               onChange={(val) => setDateRange(val as DateRangeOption)}
@@ -269,8 +379,8 @@ export default function AdminDashboardPage() {
                 label: opt.label,
               }))}
               icon={<Calendar className="w-3.5 h-3.5 text-brand-green/60 shrink-0" />}
-              className="w-44"
-              buttonClassName="py-2 px-3 shadow-2xs"
+              className="w-40 sm:w-44"
+              buttonClassName="py-2 px-3 shadow-2xs text-xs"
               ariaLabel="Select Date Range"
             />
             <Link
@@ -445,11 +555,92 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Live Orders Feed */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-black uppercase tracking-wider text-brand-green">
-              Live Orders ({filteredOrders.length})
-            </h2>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-beige-dark/60 pb-3">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-brand-green font-serif">
+                  Orders
+                </h2>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-brand-green text-brand-beige">
+                  Showing {filteredOrders.length} of{' '}
+                  {activityFilter === 'ACTIVE'
+                    ? `${activeCount} active`
+                    : activityFilter === 'INACTIVE'
+                    ? `${inactiveCount} inactive`
+                    : `${allCount} total`}
+                </span>
+              </div>
+              <p className="text-xs text-brand-green/70 mt-0.5">
+                Real-time tickets tracked across kitchen cooking, billing, and settlement.
+              </p>
+            </div>
+
+            {/* 3-State Activity Segmented Control: Active (Default) / All / Inactive */}
+            <div className="flex items-center p-1 rounded-2xl bg-white border border-brand-beige-dark shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setActivityFilter('ACTIVE')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activityFilter === 'ACTIVE'
+                    ? 'bg-brand-green text-brand-beige shadow-xs'
+                    : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+                }`}
+              >
+                <span>Active</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    activityFilter === 'ACTIVE'
+                      ? 'bg-brand-beige text-brand-green font-black'
+                      : 'bg-brand-beige-light text-brand-green/70'
+                  }`}
+                >
+                  {activeCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActivityFilter('ALL')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activityFilter === 'ALL'
+                    ? 'bg-brand-green text-brand-beige shadow-xs'
+                    : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+                }`}
+              >
+                <span>All</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    activityFilter === 'ALL'
+                      ? 'bg-brand-beige text-brand-green font-black'
+                      : 'bg-brand-beige-light text-brand-green/70'
+                  }`}
+                >
+                  {allCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActivityFilter('INACTIVE')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activityFilter === 'INACTIVE'
+                    ? 'bg-brand-green text-brand-beige shadow-xs'
+                    : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
+                }`}
+              >
+                <span>Inactive</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    activityFilter === 'INACTIVE'
+                      ? 'bg-brand-beige text-brand-green font-black'
+                      : 'bg-brand-beige-light text-brand-green/70'
+                  }`}
+                >
+                  {inactiveCount}
+                </span>
+              </button>
+            </div>
           </div>
 
           {filteredOrders.length === 0 ? (

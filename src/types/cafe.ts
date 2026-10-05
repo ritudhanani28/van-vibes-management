@@ -102,6 +102,9 @@ export interface CustomerDetails {
   specialInstructions?: string;
 }
 
+export type OrderActivityStatus = 'ACTIVE' | 'INACTIVE';
+export type ActivityFilterOption = 'ACTIVE' | 'ALL' | 'INACTIVE';
+
 export interface Order {
   id: string; // e.g., 'VV-1001'
   cafeId: string;
@@ -123,8 +126,71 @@ export interface Order {
   total: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  sessionStatus?: SessionStatus;
+  billGenerated?: boolean;
+  activityStatus?: OrderActivityStatus;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Evaluates whether an order is Inactive according to authoritative business rules:
+ * An order becomes Inactive ONLY when:
+ *   order_completed = true (status === 'COMPLETED')
+ *   AND bill_generated = true
+ *   AND payment_status = 'PAID'
+ */
+export function isOrderInactive(order: {
+  status?: string;
+  billGenerated?: boolean;
+  paymentStatus?: string;
+  activityStatus?: string;
+}): boolean {
+  const status = (order.status || '').toUpperCase();
+  const billGen = Boolean(order.billGenerated);
+  const payment = (order.paymentStatus || '').toUpperCase();
+
+  // Fully finished lifecycle: Completed + Bill Generated + Paid
+  if (status === 'COMPLETED' && billGen && payment === 'PAID') {
+    return true;
+  }
+
+  // If status is known and not completed, or bill known not generated, or payment not paid, it is ACTIVE
+  if (status && status !== 'COMPLETED') {
+    return false;
+  }
+  if (order.billGenerated === false) {
+    return false;
+  }
+  if (order.paymentStatus && payment !== 'PAID') {
+    return false;
+  }
+
+  // Fallback to backend-provided activityStatus
+  if (order.activityStatus) {
+    return order.activityStatus.toUpperCase() === 'INACTIVE';
+  }
+
+  return false;
+}
+
+/**
+ * Evaluates whether an order is Active:
+ * An order is Active when it still requires action or its billing/payment lifecycle is not completely finished:
+ * - Placed
+ * - Accepted
+ * - In Kitchen / Cooking
+ * - Completed + Bill Not Generated
+ * - Bill Generated + Payment Pending/Failed
+ */
+export function isOrderActive(order: {
+  status?: string;
+  billGenerated?: boolean;
+  paymentStatus?: string;
+  activityStatus?: string;
+}): boolean {
+  return !isOrderInactive(order);
 }
 
 export interface CafeDetails {
