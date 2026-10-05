@@ -33,6 +33,7 @@ export default function ChefManagementPage() {
   const [addPassword, setAddPassword] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [addFieldErrors, setAddFieldErrors] = useState<{ name?: string; email?: string; contact?: string; password?: string }>({});
 
   // Edit Chef Modal State
   const [editingChef, setEditingChef] = useState<User | null>(null);
@@ -44,6 +45,7 @@ export default function ChefManagementPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editFieldErrors, setEditFieldErrors] = useState<{ name?: string; email?: string; contact?: string }>({});
 
   // Delete Confirmation Modal State
   const [chefToDelete, setChefToDelete] = useState<User | null>(null);
@@ -76,13 +78,13 @@ export default function ChefManagementPage() {
   const validateContactNumber = (num: string): string | null => {
     const trimmed = num.trim();
     if (!trimmed) {
-      return 'Contact number is required.';
+      return 'Please enter contact number.';
     }
     if (!/^\d+$/.test(trimmed)) {
       return 'Contact number must contain only numeric digits (no letters, spaces, or special characters).';
     }
     if (trimmed.length !== 10) {
-      return 'Contact number must be exactly 10 digits.';
+      return 'Phone number must contain exactly 10 digits.';
     }
     return null;
   };
@@ -135,37 +137,36 @@ export default function ChefManagementPage() {
   const handleAddChef = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError(null);
+    setAddFieldErrors({});
 
     const trimmedName = addName.trim();
     const trimmedEmail = addEmail.trim();
+    const errors: { name?: string; email?: string; contact?: string; password?: string } = {};
 
     if (!trimmedName) {
-      setAddError('Chef name is required.');
-      return;
+      errors.name = 'Please enter chef name.';
+    } else if (trimmedName.length < 2) {
+      errors.name = 'Chef name must be at least 2 characters.';
     }
+
     if (!trimmedEmail) {
-      setAddError('Email address is required.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setAddError('Please enter a valid email address (e.g. chef@vaanvibes.in).');
-      return;
+      errors.email = 'Please enter email address.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address (e.g. chef@vaanvibes.in).';
     }
 
     const contactErr = validateContactNumber(addContact);
     if (contactErr) {
-      setAddError(contactErr);
-      return;
-    }
-
-    if (!addRole || addRole !== 'CHEF') {
-      setAddError('Role must be Chef.');
-      return;
+      errors.contact = contactErr;
     }
 
     const passErr = validatePasswordStrength(addPassword);
     if (passErr) {
-      setAddError(passErr);
+      errors.password = passErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setAddFieldErrors(errors);
       return;
     }
 
@@ -187,10 +188,24 @@ export default function ChefManagementPage() {
       setAddRole('CHEF');
       setAddPassword('');
       setAddError(null);
+      setAddFieldErrors({});
       setIsAddModalOpen(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create chef account. Email may already be registered.';
-      setAddError(msg);
+      const fieldErrs: { name?: string; email?: string; contact?: string; password?: string } = {};
+      if (err && typeof err === 'object' && 'fieldErrors' in err) {
+        const rawF = (err as { fieldErrors: Record<string, string> }).fieldErrors;
+        if (rawF.name) fieldErrs.name = rawF.name;
+        if (rawF.email) fieldErrs.email = rawF.email;
+        if (rawF.contact_number || rawF.contactNumber) fieldErrs.contact = rawF.contact_number || rawF.contactNumber;
+        if (rawF.password) fieldErrs.password = rawF.password;
+      }
+
+      if (Object.keys(fieldErrs).length > 0) {
+        setAddFieldErrors(fieldErrs);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to create chef account. Email may already be registered.';
+        setAddError(msg);
+      }
     } finally {
       setIsAdding(false);
     }
@@ -213,26 +228,31 @@ export default function ChefManagementPage() {
     e.preventDefault();
     if (!editingChef) return;
     setEditError(null);
+    setEditFieldErrors({});
 
     const trimmedName = editName.trim();
     const trimmedEmail = editEmail.trim();
+    const errors: { name?: string; email?: string; contact?: string } = {};
 
     if (!trimmedName) {
-      setEditError('Chef name is required.');
-      return;
+      errors.name = 'Please enter chef name.';
+    } else if (trimmedName.length < 2) {
+      errors.name = 'Chef name must be at least 2 characters.';
     }
+
     if (!trimmedEmail) {
-      setEditError('Email address is required.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setEditError('Please enter a valid email address.');
-      return;
+      errors.email = 'Please enter email address.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address.';
     }
 
     const contactErr = validateContactNumber(editContact);
     if (contactErr) {
-      setEditError(contactErr);
+      errors.contact = contactErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditFieldErrors(errors);
       return;
     }
 
@@ -251,9 +271,22 @@ export default function ChefManagementPage() {
 
       setIsEditModalOpen(false);
       setEditingChef(null);
+      setEditFieldErrors({});
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update chef details.';
-      setEditError(msg);
+      const fieldErrs: { name?: string; email?: string; contact?: string } = {};
+      if (err && typeof err === 'object' && 'fieldErrors' in err) {
+        const rawF = (err as { fieldErrors: Record<string, string> }).fieldErrors;
+        if (rawF.name) fieldErrs.name = rawF.name;
+        if (rawF.email) fieldErrs.email = rawF.email;
+        if (rawF.contact_number || rawF.contactNumber) fieldErrs.contact = rawF.contact_number || rawF.contactNumber;
+      }
+
+      if (Object.keys(fieldErrs).length > 0) {
+        setEditFieldErrors(fieldErrs);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to update chef details.';
+        setEditError(msg);
+      }
     } finally {
       setIsSavingEdit(false);
     }
@@ -535,10 +568,23 @@ export default function ChefManagementPage() {
                   required
                   placeholder="e.g. Ramesh Chef"
                   value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
+                  onChange={(e) => {
+                    setAddName(e.target.value);
+                    if (addFieldErrors.name) setAddFieldErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                   disabled={isAdding}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium text-brand-green placeholder:text-brand-green/30 transition-colors ${
+                    addFieldErrors.name
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {addFieldErrors.name && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{addFieldErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               {/* Email */}
@@ -557,10 +603,23 @@ export default function ChefManagementPage() {
                   required
                   placeholder="chef@vaanvibes.in"
                   value={addEmail}
-                  onChange={(e) => setAddEmail(e.target.value)}
+                  onChange={(e) => {
+                    setAddEmail(e.target.value);
+                    if (addFieldErrors.email) setAddFieldErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
                   disabled={isAdding}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium text-brand-green placeholder:text-brand-green/30 transition-colors ${
+                    addFieldErrors.email
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {addFieldErrors.email && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{addFieldErrors.email}</span>
+                  </p>
+                )}
               </div>
 
               {/* Contact Number */}
@@ -573,20 +632,32 @@ export default function ChefManagementPage() {
                   <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
                 </div>
                 <input
-                  type="text"
+                  type="tel"
                   name="chef_phone_contact"
                   id="chef_phone_contact"
                   autoComplete="off"
                   inputMode="numeric"
-                  pattern="[0-9]{10}"
                   maxLength={10}
                   required
                   placeholder="10-digit mobile number"
                   value={addContact}
-                  onChange={(e) => setAddContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => {
+                    setAddContact(e.target.value.replace(/\D/g, '').slice(0, 10));
+                    if (addFieldErrors.contact) setAddFieldErrors((prev) => ({ ...prev, contact: undefined }));
+                  }}
                   disabled={isAdding}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium font-mono text-brand-green placeholder:text-brand-green/30 transition-colors ${
+                    addFieldErrors.contact
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {addFieldErrors.contact && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{addFieldErrors.contact}</span>
+                  </p>
+                )}
               </div>
 
               {/* Role Dropdown - strictly Chef */}
@@ -623,10 +694,23 @@ export default function ChefManagementPage() {
                   required
                   placeholder="••••••••"
                   value={addPassword}
-                  onChange={(e) => setAddPassword(e.target.value)}
+                  onChange={(e) => {
+                    setAddPassword(e.target.value);
+                    if (addFieldErrors.password) setAddFieldErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
                   disabled={isAdding}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium text-brand-green transition-colors ${
+                    addFieldErrors.password
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {addFieldErrors.password && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{addFieldErrors.password}</span>
+                  </p>
+                )}
                 <p className="text-[10px] text-brand-green/60 leading-relaxed">
                   Must contain uppercase, lowercase, number, and special character.
                 </p>
@@ -714,10 +798,23 @@ export default function ChefManagementPage() {
                   type="text"
                   required
                   value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
+                  onChange={(e) => {
+                    setEditName(e.target.value);
+                    if (editFieldErrors.name) setEditFieldErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                   disabled={isSavingEdit}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium text-brand-green transition-colors ${
+                    editFieldErrors.name
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {editFieldErrors.name && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{editFieldErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               {/* Email */}
@@ -730,10 +827,23 @@ export default function ChefManagementPage() {
                   type="email"
                   required
                   value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEditEmail(e.target.value);
+                    if (editFieldErrors.email) setEditFieldErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
                   disabled={isSavingEdit}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium text-brand-green transition-colors ${
+                    editFieldErrors.email
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {editFieldErrors.email && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{editFieldErrors.email}</span>
+                  </p>
+                )}
               </div>
 
               {/* Contact Number */}
@@ -746,17 +856,29 @@ export default function ChefManagementPage() {
                   <span className="text-[10px] text-brand-green/60 font-mono">Min. 10 digits</span>
                 </div>
                 <input
-                  type="text"
+                  type="tel"
                   inputMode="numeric"
-                  pattern="[0-9]{10}"
                   maxLength={10}
                   required
                   placeholder="10-digit mobile number"
                   value={editContact}
-                  onChange={(e) => setEditContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => {
+                    setEditContact(e.target.value.replace(/\D/g, '').slice(0, 10));
+                    if (editFieldErrors.contact) setEditFieldErrors((prev) => ({ ...prev, contact: undefined }));
+                  }}
                   disabled={isSavingEdit}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none font-medium font-mono text-brand-green transition-colors ${
+                    editFieldErrors.contact
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                  }`}
                 />
+                {editFieldErrors.contact && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{editFieldErrors.contact}</span>
+                  </p>
+                )}
               </div>
 
               {/* Role Dropdown - strictly Chef */}

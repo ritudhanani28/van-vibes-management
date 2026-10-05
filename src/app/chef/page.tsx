@@ -17,6 +17,9 @@ import {
   ChefHat,
   CheckCircle2,
   Clock,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
   Bell,
   BellOff,
   Sparkles,
@@ -102,22 +105,39 @@ export default function ChefKDSPage() {
     playAlertSound(alertSound);
   }, [chimeEnabled, alertSound]);
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   // Load orders filtered by date range on the backend
   const loadOrders = useCallback(async () => {
     try {
+      setLoadError(null);
       const filtered = await ordersApi.getOrders({ range: selectedFilter });
       setOrders(filtered);
     } catch (err) {
-      console.error('Failed to load orders for Chef KDS:', err);
+      const msg = err instanceof Error ? err.message : 'Unable to load kitchen orders. Please try again.';
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
     }
   }, [selectedFilter]);
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
+    setLoadError(null);
     ordersApi.getOrders({ range: selectedFilter }).then((filtered) => {
-      if (active) setOrders(filtered);
+      if (active) {
+        setOrders(filtered);
+        setLoadError(null);
+      }
     }).catch((err) => {
-      console.error('Failed to load orders for Chef KDS:', err);
+      if (active) {
+        const msg = err instanceof Error ? err.message : 'Unable to load kitchen orders. Please try again.';
+        setLoadError(msg);
+      }
+    }).finally(() => {
+      if (active) setIsLoading(false);
     });
 
     // Order accepted by Admin -> appears as Incoming Order for Chef
@@ -289,6 +309,30 @@ export default function ChefKDSPage() {
           </div>
         </div>
 
+        {/* View Switcher & Orders with Loading and Error states */}
+        {isLoading ? (
+          <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3 px-4">
+            <Loader2 className="w-8 h-8 text-brand-green animate-spin mx-auto" />
+            <p className="text-xs font-bold text-brand-green">Loading kitchen tickets...</p>
+          </div>
+        ) : loadError ? (
+          <div className="py-16 bg-white rounded-3xl border border-red-200 text-center space-y-3 px-4">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto text-red-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-red-700 text-base">Unable to load kitchen orders</h3>
+            <p className="text-xs text-red-600/80 max-w-md mx-auto">{loadError}</p>
+            <button
+              type="button"
+              onClick={loadOrders}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : (
+          <>
         {/* View Switcher: Live Incoming Orders vs Completed History */}
         <div className="flex items-center gap-2">
           <button
@@ -381,6 +425,8 @@ export default function ChefKDSPage() {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
     </AppLayout>

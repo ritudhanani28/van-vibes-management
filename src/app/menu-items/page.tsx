@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MENU_CATEGORIES } from '@/features/menu/constants/categories';
 import { MenuCategory, MenuItem } from '@/types/cafe';
 import { menuApi } from '@/api/menu';
+import { ApiError } from '@/api/client';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
@@ -16,6 +17,8 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  AlertCircle,
+  UtensilsCrossed,
   X,
   CheckCircle2,
   ChevronDown,
@@ -80,15 +83,20 @@ export default function MenuItemsAdminPage() {
   });
   const [newItemErrors, setNewItemErrors] = useState<{ name?: string; category?: string; price?: string }>({});
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [editItemErrors, setEditItemErrors] = useState<{ name?: string; category?: string; price?: string }>({});
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      menuApi.getCategories().catch(() => []),
-      menuApi.getMenuItems().catch(() => []),
-    ]).then(([cats, dishItems]) => {
-      if (!active) return;
+  const fetchMenuData = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const [cats, dishItems] = await Promise.all([
+        menuApi.getCategories(),
+        menuApi.getMenuItems(),
+      ]);
       if (cats && cats.length > 0) {
         setCategories([
           { id: 'all', name: 'All Items', slug: 'all', icon: '🍽️', page: 0 },
@@ -98,13 +106,17 @@ export default function MenuItemsAdminPage() {
       if (dishItems && dishItems.length > 0) {
         setItems(sortMenuItemsAlphabetically(dishItems));
       }
-    }).catch((err) => {
+    } catch (err: unknown) {
       console.error('Failed to load menu items:', err);
-    });
-    return () => {
-      active = false;
-    };
+      setLoadError(err instanceof Error ? err.message : 'Unable to load menu items. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchMenuData();
+  }, [fetchMenuData]);
 
   useEffect(() => {
     wsManager.connect();
@@ -222,6 +234,27 @@ export default function MenuItemsAdminPage() {
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
+
+    const errors: { name?: string; category?: string; price?: string } = {};
+    if (!editingItem.name || !editingItem.name.trim()) {
+      errors.name = "Dish name is required.";
+    }
+    const validCategorySlugs = categories.filter((c) => c.id !== "all").map((c) => c.slug);
+    if (!editingItem.category || !validCategorySlugs.includes(editingItem.category)) {
+      errors.category = "Please select a valid category.";
+    }
+    const priceNum = Number(editingItem.price);
+    if (!priceNum || priceNum < 1) {
+      errors.price = "Price must be a valid number greater than 0.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditItemErrors(errors);
+      return;
+    }
+
+    setEditItemErrors({});
+    setIsSavingEdit(true);
     const name = editingItem.name;
     try {
       const updated = await menuApi.updateMenuItem(editingItem.id, editingItem);
@@ -235,8 +268,14 @@ export default function MenuItemsAdminPage() {
       triggerFeedback(`"${name}" updated successfully`);
     } catch (err: unknown) {
       console.error('Failed to update dish on backend:', err);
+      if (err instanceof ApiError && err.statusCode === 422 && err.fieldErrors) {
+        setEditItemErrors(err.fieldErrors);
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Server error';
       triggerFeedback(`Failed to update "${name}": ${msg}`);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -358,7 +397,11 @@ export default function MenuItemsAdminPage() {
         isVeg: true,
         popular: false,
       });
-    } catch {
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.statusCode === 422 && err.fieldErrors) {
+        setNewItemErrors(err.fieldErrors);
+        return;
+      }
       // Local fallback
       const newItem: MenuItem = {
         id: `custom-${Date.now()}`,
@@ -606,9 +649,47 @@ export default function MenuItemsAdminPage() {
           </div>
         )}
 
-        {/* Dish Catalog Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredItems.map((dish) => {
+        {/* Content Area: Loading -> Error -> Empty -> Grid */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Loader2 className="w-8 h-8 text-brand-green animate-spin mb-3" />
+            <p className="text-sm font-bold text-brand-green">Loading menu catalog...</p>
+            <p className="text-xs text-brand-green/60 mt-0.5">Fetching dishes and categories</p>
+          </div>
+        ) : loadError ? (
+          <div className="p-8 rounded-2xl bg-red-50 border border-red-200 text-center max-w-lg mx-auto">
+            <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+            <h3 className="text-sm font-black text-red-800">Unable to load menu items</h3>
+            <p className="text-xs text-red-600 mt-1 mb-4">{loadError}</p>
+            <button
+              onClick={() => fetchMenuData()}
+              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              Retry Loading
+            </button>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-brand-beige-dark rounded-3xl bg-white/50 p-6">
+            <UtensilsCrossed className="w-10 h-10 text-brand-green/40 mb-3" />
+            <h3 className="font-extrabold text-brand-green text-base">No Menu Items Found</h3>
+            <p className="text-xs text-brand-green/60 mt-1 max-w-xs">
+              {searchQuery.trim() || selectedCategory !== 'all'
+                ? 'No dishes match the selected category or search query.'
+                : 'Get started by creating categories and dishes in the catalog.'}
+            </p>
+            <button
+              onClick={() => {
+                setNewItemErrors({});
+                setIsAddModalOpen(true);
+              }}
+              className="mt-4 px-4 py-2 bg-brand-green text-brand-beige rounded-xl text-xs font-bold hover:bg-brand-green-hover transition-all cursor-pointer"
+            >
+              + Add New Dish
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredItems.map((dish) => {
             const isAvailable = dish.isAvailable !== false;
             return (
               <div
@@ -663,6 +744,7 @@ export default function MenuItemsAdminPage() {
                             type="button"
                             onClick={() => {
                               setActiveDropdownId(null);
+                              setEditItemErrors({});
                               setEditingItem({ ...dish });
                             }}
                             className="w-full px-3.5 py-2 text-left text-xs font-bold text-brand-green hover:bg-brand-beige-light flex items-center gap-2.5 transition-colors"
@@ -741,7 +823,8 @@ export default function MenuItemsAdminPage() {
               </div>
             );
           })}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Edit Item Modal */}
@@ -761,43 +844,78 @@ export default function MenuItemsAdminPage() {
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5 mt-4">
               <div>
-                <label className="text-[11px] font-bold text-brand-green/80 uppercase">Dish Name</label>
+                <label className="text-[11px] font-bold text-brand-green/80 uppercase">Dish Name *</label>
                 <input
                   type="text"
-                  required
                   value={editingItem.name}
-                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green focus:ring-2 focus:ring-brand-green focus:outline-none"
+                  onChange={(e) => {
+                    setEditingItem({ ...editingItem, name: e.target.value });
+                    if (editItemErrors.name) setEditItemErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  className={`w-full mt-1 px-3 py-2 rounded-xl border text-xs text-brand-green focus:outline-none transition-all ${
+                    editItemErrors.name
+                      ? 'border-red-500 focus:ring-2 focus:ring-red-200 bg-red-50/20'
+                      : 'border-brand-beige-dark focus:ring-2 focus:ring-brand-green'
+                  }`}
                 />
+                {editItemErrors.name && (
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-500 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editItemErrors.name}</span>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category</label>
-                  <CustomSelect
-                    value={editingItem.category}
-                    onChange={(val) => setEditingItem({ ...editingItem, category: val })}
-                    placeholder="Select category..."
-                    className="mt-1"
-                    options={categories
-                      .filter((c) => c.id !== "all")
-                      .map((c) => ({
-                        value: c.slug,
-                        label: `${c.icon ? c.icon + ' ' : ''}${c.name}`,
-                      }))}
-                  />
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Category *</label>
+                  <div className={editItemErrors.category ? 'ring-1 ring-red-500 rounded-xl' : ''}>
+                    <CustomSelect
+                      value={editingItem.category}
+                      onChange={(val) => {
+                        setEditingItem({ ...editingItem, category: val });
+                        if (editItemErrors.category) setEditItemErrors((prev) => ({ ...prev, category: undefined }));
+                      }}
+                      placeholder="Select category..."
+                      className="mt-1"
+                      options={categories
+                        .filter((c) => c.id !== "all")
+                        .map((c) => ({
+                          value: c.slug,
+                          label: `${c.icon ? c.icon + ' ' : ''}${c.name}`,
+                        }))}
+                    />
+                  </div>
+                  {editItemErrors.category && (
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-500 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{editItemErrors.category}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Price (₹)</label>
+                  <label className="text-[11px] font-bold text-brand-green/80 uppercase">Price (₹) *</label>
                   <input
                     type="number"
                     min="1"
-                    required
                     value={editingItem.price}
-                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-brand-beige-dark text-xs text-brand-green font-mono focus:ring-2 focus:ring-brand-green focus:outline-none"
+                    onChange={(e) => {
+                      setEditingItem({ ...editingItem, price: Number(e.target.value) });
+                      if (editItemErrors.price) setEditItemErrors((prev) => ({ ...prev, price: undefined }));
+                    }}
+                    className={`w-full mt-1 px-3 py-2 rounded-xl border text-xs text-brand-green font-mono focus:outline-none transition-all ${
+                      editItemErrors.price
+                        ? 'border-red-500 focus:ring-2 focus:ring-red-200 bg-red-50/20'
+                        : 'border-brand-beige-dark focus:ring-2 focus:ring-brand-green'
+                    }`}
                   />
+                  {editItemErrors.price && (
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-500 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{editItemErrors.price}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -845,9 +963,11 @@ export default function MenuItemsAdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs"
+                  disabled={isSavingEdit}
+                  className="px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-black text-xs shadow-xs disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                 >
-                  Save Changes
+                  {isSavingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Save Changes</span>
                 </button>
               </div>
             </form>

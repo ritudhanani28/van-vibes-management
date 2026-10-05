@@ -802,17 +802,10 @@ export default function TablesPage() {
               </button>
             </div>
 
-            {addTableError && (
-              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{addTableError}</span>
-              </div>
-            )}
-
             <form onSubmit={handleAddTable} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-brand-green block">
-                  Table Number
+                  Table Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -825,9 +818,19 @@ export default function TablesPage() {
                     setNewTableNumber(e.target.value);
                     setAddTableError(null);
                   }}
-                  className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border border-brand-beige-dark rounded-xl text-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+                  className={`w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border rounded-xl text-brand-green focus:outline-none transition-colors ${
+                    addTableError
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:ring-2 focus:ring-brand-green/30'
+                  }`}
                   autoFocus
                 />
+                {addTableError && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{addTableError}</span>
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

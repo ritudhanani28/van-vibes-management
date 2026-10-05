@@ -22,6 +22,9 @@ import {
   Download,
   Utensils,
   X,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 
 export type DateRangeOption = 'today' | 'yesterday' | '30_days' | 'month' | 'year';
@@ -43,30 +46,46 @@ export default function AdminDashboardPage() {
   const [selectedBillOrderId, setSelectedBillOrderId] = useState<string | null>(null);
   const [selectedBillSessionId, setSelectedBillSessionId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRangeOption>('today');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async (rangeToFetch: DateRangeOption = dateRange) => {
     try {
+      setLoadError(null);
       const [fetchedOrders, fetchedTables] = await Promise.all([
-        ordersApi.getOrders({ range: rangeToFetch }).catch(() => []),
-        tablesApi.getTables().catch(() => []),
+        ordersApi.getOrders({ range: rangeToFetch }),
+        tablesApi.getTables(),
       ]);
       setOrders(fetchedOrders);
       setTables(fetchedTables);
-    } catch {
-      // ignore
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to load dashboard data. Please try again.';
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
     }
   }, [dateRange]);
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
+    setLoadError(null);
     Promise.all([
-      ordersApi.getOrders({ range: dateRange }).catch(() => []),
-      tablesApi.getTables().catch(() => []),
+      ordersApi.getOrders({ range: dateRange }),
+      tablesApi.getTables(),
     ]).then(([fetchedOrders, fetchedTables]) => {
       if (active) {
         setOrders(fetchedOrders);
         setTables(fetchedTables);
+        setLoadError(null);
       }
+    }).catch((err) => {
+      if (active) {
+        const msg = err instanceof Error ? err.message : 'Unable to load dashboard data. Please try again.';
+        setLoadError(msg);
+      }
+    }).finally(() => {
+      if (active) setIsLoading(false);
     });
 
     // Real-time WebSocket event listeners (silent background updates)
@@ -264,6 +283,30 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        {/* Operational KPI Metric Cards & Sections with Loading/Error states */}
+        {isLoading ? (
+          <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3 px-4">
+            <Loader2 className="w-8 h-8 text-brand-green animate-spin mx-auto" />
+            <p className="text-xs font-bold text-brand-green">Loading dashboard metrics...</p>
+          </div>
+        ) : loadError ? (
+          <div className="py-16 bg-white rounded-3xl border border-red-200 text-center space-y-3 px-4">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto text-red-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-red-700 text-base">Unable to load dashboard</h3>
+            <p className="text-xs text-red-600/80 max-w-md mx-auto">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => loadData(dateRange)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : (
+          <>
         {/* Operational KPI Metric Cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Total Orders */}
@@ -446,6 +489,8 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Bill Modal */}

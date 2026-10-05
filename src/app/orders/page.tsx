@@ -12,6 +12,8 @@ import { useAuth } from '@/context/AuthContext';
 import {
   Search,
   ShoppingBag,
+  Loader2,
+  AlertCircle,
   Filter,
   Calendar,
   Utensils,
@@ -36,6 +38,9 @@ export default function OrdersPage() {
   const isChef = role === 'CHEF';
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   // Filters default to ALL (no selected filter initially)
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilterOption>('ALL');
@@ -48,19 +53,33 @@ export default function OrdersPage() {
 
   const loadOrders = useCallback(async () => {
     try {
+      setLoadError(null);
       const all = await ordersApi.getOrders();
       setOrders(all);
     } catch (err) {
-      console.error('Failed to load orders:', err);
+      const msg = err instanceof Error ? err.message : 'Unable to load orders. Please try again.';
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
+    setLoadError(null);
     ordersApi.getOrders().then((all) => {
-      if (active) setOrders(all);
+      if (active) {
+        setOrders(all);
+        setLoadError(null);
+      }
     }).catch((err) => {
-      console.error('Failed to load orders:', err);
+      if (active) {
+        const msg = err instanceof Error ? err.message : 'Unable to load orders. Please try again.';
+        setLoadError(msg);
+      }
+    }).finally(() => {
+      if (active) setIsLoading(false);
     });
 
     // Real-time: Listen for new orders
@@ -472,7 +491,28 @@ export default function OrdersPage() {
         </div>
 
         {/* Orders Grid Display */}
-        {filteredOrders.length === 0 ? (
+        {isLoading ? (
+          <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3 px-4">
+            <Loader2 className="w-8 h-8 text-brand-green animate-spin mx-auto" />
+            <p className="text-xs font-bold text-brand-green">Loading orders...</p>
+          </div>
+        ) : loadError ? (
+          <div className="py-16 bg-white rounded-3xl border border-red-200 text-center space-y-3 px-4">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto text-red-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-red-700 text-base">Unable to load orders</h3>
+            <p className="text-xs text-red-600/80 max-w-md mx-auto">{loadError}</p>
+            <button
+              type="button"
+              onClick={loadOrders}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : filteredOrders.length === 0 ? (
           <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3 px-4">
             <div className="w-12 h-12 rounded-full bg-brand-beige flex items-center justify-center mx-auto text-brand-green/40">
               <ShoppingBag className="w-6 h-6" />

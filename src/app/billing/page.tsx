@@ -12,6 +12,8 @@ import {
   FileText,
   CheckCircle2,
   Clock,
+  Loader2,
+  AlertCircle,
   Search,
   Layers,
   UtensilsCrossed,
@@ -25,9 +27,12 @@ export default function BillingPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null);
       const [sessData, pendingData, ledgerData] = await Promise.all([
         diningSessionsApi.getSessions(),
         billingApi.getPendingPayments(),
@@ -37,12 +42,17 @@ export default function BillingPage() {
       setPendingInvoices(pendingData);
       setLedgerInvoices(ledgerData);
     } catch (err) {
-      console.error('Failed to load billing data:', err);
+      const msg = err instanceof Error ? err.message : 'Unable to load billing data. Please try again.';
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
+    setLoadError(null);
     Promise.all([
       diningSessionsApi.getSessions(),
       billingApi.getPendingPayments(),
@@ -52,9 +62,15 @@ export default function BillingPage() {
         setSessions(sessData);
         setPendingInvoices(pendingData);
         setLedgerInvoices(ledgerData);
+        setLoadError(null);
       }
     }).catch((err) => {
-      console.error('Failed to load billing data:', err);
+      if (active) {
+        const msg = err instanceof Error ? err.message : 'Unable to load billing data. Please try again.';
+        setLoadError(msg);
+      }
+    }).finally(() => {
+      if (active) setIsLoading(false);
     });
 
     const unsubTable = wsManager.on('TABLE_STATUS_UPDATED', () => loadData());
@@ -166,6 +182,29 @@ export default function BillingPage() {
           </div>
         </div>
 
+        {/* View Selection Tabs & Content with Loading/Error states */}
+        {isLoading ? (
+          <div className="py-16 bg-white rounded-3xl border border-brand-beige-dark text-center space-y-3 px-4">
+            <Loader2 className="w-8 h-8 text-brand-green animate-spin mx-auto" />
+            <p className="text-xs font-bold text-brand-green">Loading billing records...</p>
+          </div>
+        ) : loadError ? (
+          <div className="py-16 bg-white rounded-3xl border border-red-200 text-center space-y-3 px-4">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto text-red-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-red-700 text-base">Unable to load billing data</h3>
+            <p className="text-xs text-red-600/80 max-w-md mx-auto">{loadError}</p>
+            <button
+              type="button"
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
+            >
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : (
+          <>
         {/* View Selection Tabs */}
         <div className="flex border-b border-brand-beige-dark bg-white rounded-2xl p-1.5 shadow-2xs gap-1 overflow-x-auto no-scrollbar flex-nowrap">
           <button
@@ -493,6 +532,8 @@ export default function BillingPage() {
               </table>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
 

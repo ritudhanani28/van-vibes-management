@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
@@ -10,21 +10,86 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  const validateField = (field: 'email' | 'password', value: string): string | undefined => {
+    if (field === 'email') {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return 'Please enter your email.';
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        return 'Please enter a valid email address.';
+      }
+    }
+    if (field === 'password') {
+      if (!value) {
+        return 'Please enter your password.';
+      }
+    }
+    return undefined;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setEmail(val);
+    if (fieldErrors.email) {
+      setFieldErrors((prev) => ({ ...prev, email: validateField('email', val) }));
+    }
+  };
+
+  const handleEmailBlur = () => {
+    setFieldErrors((prev) => ({ ...prev, email: validateField('email', email) }));
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setPassword(val);
+    if (fieldErrors.password) {
+      setFieldErrors((prev) => ({ ...prev, password: validateField('password', val) }));
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    setFieldErrors((prev) => ({ ...prev, password: validateField('password', password) }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please provide both email and password.');
+    setGeneralError(null);
+
+    const emailErr = validateField('email', email);
+    const passErr = validateField('password', password);
+
+    const errors: { email?: string; password?: string } = {};
+    if (emailErr) errors.email = emailErr;
+    if (passErr) errors.password = passErr;
+
+    setFieldErrors(errors);
+
+    if (emailErr) {
+      emailInputRef.current?.focus();
+      return;
+    }
+    if (passErr) {
+      passwordInputRef.current?.focus();
       return;
     }
 
     setIsSubmitting(true);
-    setError(null);
 
-    const result = await login(email, password);
-    if (!result.success) {
-      setError(result.error || 'Failed to sign in. Please check credentials.');
+    try {
+      const result = await login(email.trim(), password);
+      if (!result.success) {
+        setGeneralError(result.error || 'Invalid email or password.');
+      }
+    } catch {
+      setGeneralError('Unable to connect to the server. Please try again.');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -66,68 +131,106 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+          {/* General Error Message Banner */}
+          {generalError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in"
+            >
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{error}</span>
+              <span>{generalError}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email Field */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-brand-green block">
-                Email Address
+              <label htmlFor="login-email-input" className="text-xs font-bold text-brand-green block">
+                Email Address <span className="text-red-500">*</span>
               </label>
               <div className="relative flex items-center">
                 <div className="absolute left-3.5 text-brand-green/40 pointer-events-none">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
+                  id="login-email-input"
+                  ref={emailInputRef}
                   type="email"
                   autoComplete="username"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. admin@vaanvibes.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-brand-green placeholder:text-brand-green/30 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-green shadow-2xs min-h-[42px]"
-                  required
+                  onChange={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  placeholder="e.g. admin@vaanvibes.in"
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.email}
+                  aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
+                  disabled={isSubmitting}
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-brand-green placeholder:text-brand-green/30 focus:outline-none min-h-[42px] transition-colors ${
+                    fieldErrors.email
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
+                  }`}
                 />
               </div>
+              {fieldErrors.email && (
+                <p id="login-email-error" className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                  <span>{fieldErrors.email}</span>
+                </p>
+              )}
             </div>
 
             {/* Password Field with Toggle (👁️) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-brand-green block">Password</label>
+              <label htmlFor="login-password-input" className="text-xs font-bold text-brand-green block">
+                Password <span className="text-red-500">*</span>
+              </label>
               <div className="relative flex items-center">
                 <div className="absolute left-3.5 text-brand-green/40 pointer-events-none">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
+                  id="login-password-input"
+                  ref={passwordInputRef}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handlePasswordChange}
+                  onBlur={handlePasswordBlur}
                   placeholder="Enter your password"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-brand-beige-dark text-brand-green placeholder:text-brand-green/30 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-green shadow-2xs min-h-[42px]"
-                  required
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.password}
+                  aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
+                  disabled={isSubmitting}
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-xs sm:text-sm text-brand-green placeholder:text-brand-green/30 focus:outline-none min-h-[42px] transition-colors ${
+                    fieldErrors.password
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
+                  }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 text-brand-green/40 hover:text-brand-green transition-colors p-1"
+                  disabled={isSubmitting}
+                  className="absolute right-3 text-brand-green/40 hover:text-brand-green transition-colors p-1 cursor-pointer disabled:opacity-50"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {fieldErrors.password && (
+                <p id="login-password-error" className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                  <span>{fieldErrors.password}</span>
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 disabled:opacity-50 min-h-[44px]"
+              className="w-full py-3 px-4 rounded-xl bg-brand-green hover:bg-brand-green-hover text-brand-beige font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 disabled:opacity-50 min-h-[44px] cursor-pointer"
             >
               {isSubmitting ? (
                 <div className="w-5 h-5 rounded-full border-2 border-brand-beige border-t-transparent animate-spin" />

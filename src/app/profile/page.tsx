@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState<{ current?: string; new?: string; confirm?: string }>({});
 
   // Edit Profile State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -35,6 +36,7 @@ export default function ProfilePage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileFieldErrors, setProfileFieldErrors] = useState<{ name?: string; contact?: string }>({});
 
   const handleStartEdit = () => {
     setEditName(user?.name || '');
@@ -42,27 +44,37 @@ export default function ProfilePage() {
     setIsEditingProfile(true);
     setProfileSuccess(null);
     setProfileError(null);
+    setProfileFieldErrors({});
   };
 
   const handleCancelEdit = () => {
     setIsEditingProfile(false);
     setProfileError(null);
+    setProfileFieldErrors({});
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileSuccess(null);
     setProfileError(null);
+    setProfileFieldErrors({});
 
     const trimmedName = editName.trim();
-    if (trimmedName.length < 2) {
-      setProfileError('Full Name must be at least 2 characters long.');
-      return;
+    const trimmedContact = editContact.trim();
+    const errors: { name?: string; contact?: string } = {};
+
+    if (!trimmedName) {
+      errors.name = 'Please enter your full name.';
+    } else if (trimmedName.length < 2) {
+      errors.name = 'Full Name must be at least 2 characters long.';
     }
 
-    const trimmedContact = editContact.trim();
-    if (trimmedContact && (!/^\d+$/.test(trimmedContact) || trimmedContact.length !== 10)) {
-      setProfileError('Contact Number must be exactly 10 numeric digits.');
+    if (trimmedContact && !/^\d{10}$/.test(trimmedContact)) {
+      errors.contact = 'Phone number must contain exactly 10 digits.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setProfileFieldErrors(errors);
       return;
     }
 
@@ -76,12 +88,24 @@ export default function ProfilePage() {
       if (res.success) {
         setProfileSuccess('Profile details updated successfully!');
         setIsEditingProfile(false);
+        setProfileFieldErrors({});
       } else {
         setProfileError(res.error || 'Failed to update profile.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update profile.';
-      setProfileError(msg);
+      const fieldErrs: { name?: string; contact?: string } = {};
+      if (err && typeof err === 'object' && 'fieldErrors' in err) {
+        const rawF = (err as { fieldErrors: Record<string, string> }).fieldErrors;
+        if (rawF.name) fieldErrs.name = rawF.name;
+        if (rawF.contact_number || rawF.contactNumber) fieldErrs.contact = rawF.contact_number || rawF.contactNumber;
+      }
+
+      if (Object.keys(fieldErrs).length > 0) {
+        setProfileFieldErrors(fieldErrs);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to update profile.';
+        setProfileError(msg);
+      }
     } finally {
       setIsSavingProfile(false);
     }
@@ -91,24 +115,28 @@ export default function ProfilePage() {
     e.preventDefault();
     setSuccessMessage(null);
     setErrorMessage(null);
+    setPasswordFieldErrors({});
+
+    const errors: { current?: string; new?: string; confirm?: string } = {};
 
     if (!currentPassword) {
-      setErrorMessage('Please enter your current password.');
-      return;
+      errors.current = 'Please enter your current password.';
     }
 
     if (!newPassword) {
-      setErrorMessage('Please enter a new password.');
-      return;
+      errors.new = 'Please enter a new password.';
+    } else if (newPassword.length < 6) {
+      errors.new = 'New password must be at least 6 characters long.';
     }
 
-    if (newPassword.length < 6) {
-      setErrorMessage('New password must be at least 6 characters long.');
-      return;
+    if (!confirmNewPassword) {
+      errors.confirm = 'Please repeat the new password.';
+    } else if (newPassword && newPassword !== confirmNewPassword) {
+      errors.confirm = 'New passwords do not match.';
     }
 
-    if (newPassword !== confirmNewPassword) {
-      setErrorMessage('New passwords do not match.');
+    if (Object.keys(errors).length > 0) {
+      setPasswordFieldErrors(errors);
       return;
     }
 
@@ -124,6 +152,7 @@ export default function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
+      setPasswordFieldErrors({});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to change password. Please check your credentials.';
       setErrorMessage(msg);
@@ -216,9 +245,22 @@ export default function ProfilePage() {
                     required
                     placeholder="e.g. Admin Manager"
                     value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green"
+                    onChange={(e) => {
+                      setEditName(e.target.value);
+                      if (profileFieldErrors.name) setProfileFieldErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none font-medium text-brand-green transition-colors ${
+                      profileFieldErrors.name
+                        ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                        : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                    }`}
                   />
+                  {profileFieldErrors.name && (
+                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{profileFieldErrors.name}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Contact Number Input */}
@@ -227,16 +269,28 @@ export default function ProfilePage() {
                     Contact Number (10 Digits)
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     autoComplete="tel"
                     inputMode="numeric"
-                    pattern="[0-9]{10}"
                     maxLength={10}
                     placeholder="e.g. 9876543210"
                     value={editContact}
-                    onChange={(e) => setEditContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/20 bg-white font-medium text-brand-green placeholder:text-brand-green/30"
+                    onChange={(e) => {
+                      setEditContact(e.target.value.replace(/\D/g, '').slice(0, 10));
+                      if (profileFieldErrors.contact) setProfileFieldErrors((prev) => ({ ...prev, contact: undefined }));
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none font-medium font-mono text-brand-green placeholder:text-brand-green/30 transition-colors ${
+                      profileFieldErrors.contact
+                        ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                        : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
+                    }`}
                   />
+                  {profileFieldErrors.contact && (
+                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{profileFieldErrors.contact}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Email (Read-only) */}
@@ -363,9 +417,22 @@ export default function ProfilePage() {
                   autoComplete="current-password"
                   placeholder="Enter current password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    if (passwordFieldErrors.current) setPasswordFieldErrors((prev) => ({ ...prev, current: undefined }));
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none transition-colors ${
+                    passwordFieldErrors.current
+                      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                      : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
+                  }`}
                 />
+                {passwordFieldErrors.current && (
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                    <span>{passwordFieldErrors.current}</span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -378,9 +445,22 @@ export default function ProfilePage() {
                     autoComplete="new-password"
                     placeholder="Min. 6 characters"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (passwordFieldErrors.new) setPasswordFieldErrors((prev) => ({ ...prev, new: undefined }));
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none transition-colors ${
+                      passwordFieldErrors.new
+                        ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                        : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
+                    }`}
                   />
+                  {passwordFieldErrors.new && (
+                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{passwordFieldErrors.new}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -392,9 +472,22 @@ export default function ProfilePage() {
                     autoComplete="new-password"
                     placeholder="Repeat new password"
                     value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-beige-dark text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                    onChange={(e) => {
+                      setConfirmNewPassword(e.target.value);
+                      if (passwordFieldErrors.confirm) setPasswordFieldErrors((prev) => ({ ...prev, confirm: undefined }));
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none transition-colors ${
+                      passwordFieldErrors.confirm
+                        ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/10'
+                        : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
+                    }`}
                   />
+                  {passwordFieldErrors.confirm && (
+                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{passwordFieldErrors.confirm}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
