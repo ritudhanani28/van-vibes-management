@@ -47,10 +47,21 @@ export const ordersApi = {
     });
   },
 
-  cancelOrder: async (orderId: string, reason?: string): Promise<{ message: string; order: Order }> => {
+  cancelOrder: async (
+    orderId: string,
+    payload?: { reason: string; cancellation_note?: string; cancelled_by?: string } | string
+  ): Promise<{ message: string; order: Order }> => {
+    const body =
+      typeof payload === "string"
+        ? { reason: payload, cancelled_by: "management" }
+        : {
+            reason: payload?.reason || "Management cancelled order",
+            cancellation_note: payload?.cancellation_note,
+            cancelled_by: payload?.cancelled_by || "management",
+          };
     return apiClient<{ message: string; order: Order }>(`/orders/${orderId}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(body),
     });
   },
 };

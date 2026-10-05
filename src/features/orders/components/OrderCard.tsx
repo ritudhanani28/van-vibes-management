@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Order, OrderStatus } from '@/types/cafe';
 import { useAuth } from '@/context/AuthContext';
+import { ordersApi } from '@/api/orders';
 import {
   Clock,
   CheckCircle2,
@@ -12,7 +13,19 @@ import {
   User,
   Phone,
   Utensils,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
+
+const MANAGEMENT_CANCELLATION_REASONS = [
+  'Customer requested cancellation',
+  'Item unavailable',
+  'Kitchen unavailable',
+  'Restaurant closed',
+  'Duplicate order',
+  'Payment issue',
+  'Other',
+];
 
 interface Props {
   order: Order;
@@ -26,7 +39,60 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
   const isChef = role === 'CHEF' || !!isKitchenView;
   const [isUpdating, setIsUpdating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [customExplanation, setCustomExplanation] = useState('');
+  const [additionalNote, setAdditionalNote] = useState('');
+  const [cancelFieldError, setCancelFieldError] = useState<string | null>(null);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+
+  const handleOpenCancelModal = () => {
+    setShowCancelModal(true);
+    setCancelReason('');
+    setCustomExplanation('');
+    setAdditionalNote('');
+    setCancelFieldError(null);
+  };
+
+  const handleCloseCancelModal = () => {
+    if (!isCancellingOrder) {
+      setShowCancelModal(false);
+      setCancelReason('');
+      setCustomExplanation('');
+      setAdditionalNote('');
+      setCancelFieldError(null);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (isCancellingOrder) return;
+    if (!cancelReason) {
+      setCancelFieldError('Please select a cancellation reason.');
+      return;
+    }
+    if (cancelReason === 'Other' && !customExplanation.trim()) {
+      setCancelFieldError('Please specify the reason for cancellation.');
+      return;
+    }
+
+    setIsCancellingOrder(true);
+    setCancelFieldError(null);
+    try {
+      const finalReason = cancelReason === 'Other' ? customExplanation.trim() : cancelReason;
+      const finalNote = additionalNote.trim() || undefined;
+      await ordersApi.cancelOrder(order.id, {
+        reason: finalReason,
+        cancellation_note: finalNote,
+        cancelled_by: 'management',
+      });
+      setShowCancelModal(false);
+      await onUpdateStatus(order.id, 'CANCELLED');
+    } catch (err: unknown) {
+      setCancelFieldError(err instanceof Error ? err.message : 'Failed to cancel order.');
+    } finally {
+      setIsCancellingOrder(false);
+    }
+  };
   const [elapsedMinutes, setElapsedMinutes] = useState(() => {
     if (order.status === 'COMPLETED' || order.status === 'SERVED' || order.status === 'CANCELLED') {
       return 0;
@@ -255,6 +321,50 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
             </p>
           </div>
         )}
+
+        {/* Cancellation Audit Information */}
+        {order.status === 'CANCELLED' && (
+          <div className="p-3 rounded-2xl bg-red-50/90 border border-red-200/90 text-red-950 text-xs space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold uppercase text-[10px] tracking-wider text-red-800">
+                Order Cancelled
+              </span>
+              {(order.cancelledAt || order.cancelled_at) && (
+                <span className="font-mono text-[11px] text-red-700 font-bold">
+                  Cancelled at {new Date(order.cancelledAt || order.cancelled_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+            <div className="pt-1 border-t border-red-200/60 space-y-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-bold text-red-900 text-[11px] uppercase tracking-wide">
+                  Cancelled by:
+                </span>
+                <span className="font-semibold text-red-950 capitalize">
+                  {(() => {
+                    const by = (order.cancelledBy || order.cancelled_by || '').toLowerCase();
+                    return by === 'customer' ? 'Customer' : 'Management';
+                  })()}
+                </span>
+              </div>
+              {(order.cancellationReason || order.cancellation_reason) && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-bold text-red-900 text-[11px] uppercase tracking-wide">
+                    Reason:
+                  </span>
+                  <span className="font-medium text-red-900">
+                    {order.cancellationReason || order.cancellation_reason}
+                  </span>
+                </div>
+              )}
+              {(order.cancellationNote || order.cancellation_note) && (
+                <div className="text-[11px] text-red-800/90 italic">
+                  Note: {order.cancellationNote || order.cancellation_note}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order Items List */}
@@ -400,44 +510,15 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 ml-auto flex-wrap">
           {/* Admin Cancel Button (Only if PLACED) */}
           {!isChef && (order.status === 'PLACED' || order.status === 'ORDER_PLACED') && (
-            <>
-              {!showCancelPrompt ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCancelPrompt(true)}
-                  className="px-2.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs transition-colors min-h-[40px] cursor-pointer"
-                  title="Cancel Order"
-                >
-                  <XCircle className="w-4 h-4" />
-                </button>
-              ) : (
-                <div className="flex items-center gap-1 p-1 bg-red-50 rounded-xl border border-red-200">
-                  <span className="text-[10px] font-bold text-red-700 px-1">Cancel?</span>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsUpdating(true);
-                      try {
-                        await onUpdateStatus(order.id, 'CANCELLED');
-                      } finally {
-                        setIsUpdating(false);
-                        setShowCancelPrompt(false);
-                      }
-                    }}
-                    className="px-2 py-1 rounded bg-red-600 text-white font-black text-[10px] uppercase shadow-2xs cursor-pointer"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelPrompt(false)}
-                    className="px-2 py-1 rounded bg-white text-gray-700 font-bold text-[10px] border border-gray-200 cursor-pointer"
-                  >
-                    No
-                  </button>
-                </div>
-              )}
-            </>
+            <button
+              type="button"
+              onClick={handleOpenCancelModal}
+              className="px-2.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs transition-colors min-h-[40px] cursor-pointer flex items-center gap-1"
+              title="Cancel Order"
+            >
+              <XCircle className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Cancel</span>
+            </button>
           )}
 
           {/* Billing Action: Generate Bill */}
@@ -472,6 +553,133 @@ export function OrderCard({ order, onUpdateStatus, onOpenBill, isKitchenView }: 
           )}
         </div>
       </div>
+      {/* Management Custom Cancellation Modal */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={handleCloseCancelModal}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-brand-beige-dark overflow-hidden p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150 text-brand-green"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Icon & Title */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-black text-lg text-brand-green leading-tight">
+                  Cancel Order
+                </h4>
+                <p className="text-xs text-brand-green/60 font-mono mt-0.5">
+                  Order #{order.id} • Table {order.tableNumber}
+                </p>
+              </div>
+            </div>
+
+            {/* Error Banner */}
+            {cancelFieldError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-start gap-2 animate-in fade-in duration-150">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                <span className="leading-relaxed">{cancelFieldError}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-brand-green/70 leading-relaxed">
+              Are you sure you want to cancel this order?
+            </p>
+
+            {/* Reason Selection */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wide block">
+                Cancellation Reason <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => {
+                  setCancelReason(e.target.value);
+                  setCancelFieldError(null);
+                }}
+                disabled={isCancellingOrder}
+                className="w-full px-3 py-2.5 rounded-xl border border-brand-beige-dark bg-brand-beige-light/50 text-brand-green text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-green/30 cursor-pointer"
+              >
+                <option value="">Select reason...</option>
+                {MANAGEMENT_CANCELLATION_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom explanation if Other */}
+            {cancelReason === 'Other' && (
+              <div className="space-y-1 text-left animate-in fade-in duration-150">
+                <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wide block">
+                  Custom Explanation <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={customExplanation}
+                  onChange={(e) => {
+                    setCustomExplanation(e.target.value);
+                    setCancelFieldError(null);
+                  }}
+                  disabled={isCancellingOrder}
+                  placeholder="Specify reason..."
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark bg-brand-beige-light/50 text-brand-green text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/30 resize-none"
+                />
+              </div>
+            )}
+
+            {/* Additional Note (Optional) */}
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-bold text-brand-green/80 uppercase tracking-wide block">
+                Additional Note <span className="text-brand-green/40 text-[10px] font-normal">(Optional)</span>
+              </label>
+              <textarea
+                value={additionalNote}
+                onChange={(e) => setAdditionalNote(e.target.value)}
+                disabled={isCancellingOrder}
+                placeholder="Optional explanation..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl border border-brand-beige-dark bg-brand-beige-light/50 text-brand-green text-xs focus:outline-none focus:ring-2 focus:ring-brand-green/30 resize-none"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isCancellingOrder}
+                onClick={handleCloseCancelModal}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-brand-beige-dark font-bold text-xs text-brand-green/70 hover:bg-brand-beige transition-colors disabled:opacity-50 cursor-pointer min-h-[40px]"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={isCancellingOrder}
+                onClick={handleConfirmCancel}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
+              >
+                {isCancellingOrder ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Cancel Order</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

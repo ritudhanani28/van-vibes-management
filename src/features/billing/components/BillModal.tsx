@@ -406,11 +406,13 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
             .bill-print-qr {
               display: block !important;
               margin: 0 auto !important;
-              width: 110px !important;
-              height: 110px !important;
-              max-width: 120px !important;
+              width: 220px !important;
+              height: auto !important;
+              max-width: 260px !important;
               object-fit: contain !important;
               background: #ffffff !important;
+              image-rendering: -webkit-optimize-contrast !important;
+              image-rendering: crisp-edges !important;
             }
             .bill-print-qr-title {
               font-size: 11px !important;
@@ -595,15 +597,12 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                   />
                 </div>
 
-                {CAFE_BRAND.address && (
-                  <p className="text-[11px] text-brand-green/60 font-medium">{CAFE_BRAND.address}</p>
-                )}
-                {CAFE_BRAND.phone && (
-                  <p className="text-[10px] text-brand-green/60 font-mono">Ph: {CAFE_BRAND.phone}</p>
-                )}
-                {CAFE_BRAND.gstin && (
-                  <p className="text-[10px] text-brand-green/60 font-mono">GSTIN: {CAFE_BRAND.gstin}</p>
-                )}
+                <p className="text-[11px] text-brand-green/60 font-medium">
+                  {CAFE_BRAND.address || "Titanium The Business Hub, G-17, Bhimrad Rd, opp. Aakash Empire, beside White Temple, Surat, Gujarat 395007"}
+                </p>
+                <p className="text-[10px] text-brand-green/60 font-mono">
+                  contact us: {CAFE_BRAND.phone || "+91 9904990790"}
+                </p>
               </div>
 
               {/* Invoice & Order Metadata */}
@@ -655,25 +654,61 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-beige-dark/30 text-xs text-brand-green">
-                      {bill.items.map((item, idx) => (
-                        <tr key={idx} className="align-top">
-                          <td className="py-2 pr-2">
-                            <p className="font-bold leading-snug">{item.name}</p>
-                            {item.notes && (
-                              <p className="text-[10px] text-brand-green/60 italic mt-0.5">{item.notes}</p>
-                            )}
-                          </td>
-                          <td className="py-2 px-2 text-center text-brand-green/80 font-medium font-mono">
-                            {item.quantity}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono text-brand-green/80">
-                            ₹{item.unitPrice.toFixed(2)}
-                          </td>
-                          <td className="py-2 pl-2 text-right font-bold font-mono text-brand-green">
-                            ₹{item.totalPrice.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
+                      {bill.items.map((item, idx) => {
+                        const hasExtras = Boolean(item.extras && item.extras.length > 0);
+                        const baseUnit = item.baseUnitPrice !== undefined
+                          ? item.baseUnitPrice
+                          : (hasExtras ? item.unitPrice - item.extras!.reduce((acc, e) => acc + (e.price || 0), 0) : item.unitPrice);
+                        const baseTotal = item.baseTotalPrice !== undefined
+                          ? item.baseTotalPrice
+                          : baseUnit * item.quantity;
+
+                        return (
+                          <React.Fragment key={idx}>
+                            <tr className="align-top">
+                              <td className="py-2 pr-2">
+                                <p className="font-bold leading-snug">{item.name}</p>
+                                {item.notes && (
+                                  <p className="text-[10px] text-brand-green/60 italic mt-0.5">{item.notes}</p>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-center text-brand-green/80 font-medium font-mono">
+                                {item.quantity}
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono text-brand-green/80">
+                                ₹{baseUnit.toFixed(2)}
+                              </td>
+                              <td className="py-2 pl-2 text-right font-bold font-mono text-brand-green">
+                                ₹{baseTotal.toFixed(2)}
+                              </td>
+                            </tr>
+                            {hasExtras && item.extras!.map((extra, eIdx) => {
+                              const extraLineTotal = extra.total !== undefined ? extra.total : (extra.price * item.quantity);
+                              return (
+                                <tr key={`${idx}-extra-${eIdx}`} className="align-top text-[11px] text-brand-green/85 bg-brand-beige-light/40 border-t border-brand-beige-dark/20">
+                                  <td className="py-1 pr-2 pl-3 sm:pl-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[9px] font-black uppercase tracking-wider text-brand-gold bg-brand-gold/15 px-1 py-0.5 rounded">
+                                        Extra:
+                                      </span>
+                                      <span className="font-medium text-brand-green">{extra.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-1 px-2 text-center text-brand-green/60 font-mono text-[10px]">
+                                    {item.quantity > 1 ? `${item.quantity}×` : ""}
+                                  </td>
+                                  <td className="py-1 px-2 text-right font-mono text-brand-green/70 text-[11px]">
+                                    +₹{extra.price.toFixed(2)}
+                                  </td>
+                                  <td className="py-1 pl-2 text-right font-bold font-mono text-brand-green text-[11px]">
+                                    +₹{extraLineTotal.toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-dashed border-brand-beige-dark/80 text-xs font-bold text-brand-green">
@@ -931,13 +966,14 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                 <div className="flex justify-center items-center py-0.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={UPI_PAYMENT_QR_DATA_URL}
+                    src={bill?.paymentQrCode || UPI_PAYMENT_QR_DATA_URL}
                     alt="UPI Scan & Pay QR Code"
-                    className="bill-print-qr w-28 h-28 sm:w-32 sm:h-32 object-contain mx-auto rounded-lg border border-brand-beige-dark/50 p-1 bg-white shadow-2xs"
+                    className="bill-print-qr w-48 h-auto sm:w-56 object-contain mx-auto rounded-xl border border-brand-beige-dark/60 p-2 bg-white shadow-2xs"
+                    style={{ imageRendering: "-webkit-optimize-contrast" }}
                   />
                 </div>
-                <p className="bill-print-qr-upi text-[10px] sm:text-[11px] font-mono font-bold text-brand-green tracking-wide">
-                  UPI ID: {UPI_ID}
+                <p className="bill-print-qr-upi text-xs sm:text-sm font-mono font-bold text-brand-green tracking-wide">
+                  UPI ID: {bill?.upiId || UPI_ID}
                 </p>
               </div>
               )}

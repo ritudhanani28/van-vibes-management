@@ -219,11 +219,12 @@ body {
   .bill-print-qr {
     display: block !important;
     margin: 0 auto !important;
-    width: 110px !important;
-    height: 110px !important;
-    max-width: 120px !important;
+    width: 145px !important;
+    height: 145px !important;
+    max-width: 160px !important;
     object-fit: contain !important;
     background: #ffffff !important;
+    image-rendering: -webkit-optimize-contrast !important;
   }
 
   .bill-print-qr-title {
@@ -237,7 +238,7 @@ body {
 
   .bill-print-qr-upi {
     font-family: monospace !important;
-    font-size: 10px !important;
+    font-size: 11px !important;
     font-weight: 700 !important;
     margin-top: 4px !important;
     color: #18312B !important;

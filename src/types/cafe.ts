@@ -130,6 +130,14 @@ export interface Order {
   billGenerated?: boolean;
   activityStatus?: OrderActivityStatus;
   isActive?: boolean;
+  cancellationReason?: string;
+  cancellation_reason?: string;
+  cancellationNote?: string;
+  cancellation_note?: string;
+  cancelledBy?: string;
+  cancelled_by?: string;
+  cancelledAt?: string;
+  cancelled_at?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -148,6 +156,9 @@ export function isOrderInactive(order: {
   activityStatus?: string;
 }): boolean {
   const status = (order.status || '').toUpperCase();
+  if (status === 'CANCELLED') {
+    return true;
+  }
   const billGen = Boolean(order.billGenerated);
   const payment = (order.paymentStatus || '').toUpperCase();
 
@@ -236,7 +247,14 @@ export interface BillData {
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    baseUnitPrice?: number;
+    baseTotalPrice?: number;
     notes?: string;
+    extras?: {
+      name: string;
+      price: number;
+      total: number;
+    }[];
   }[];
   subtotal: number;
   cgst: number;
@@ -249,6 +267,9 @@ export interface BillData {
   roundOff?: number;
   total: number;
   paymentStatus: PaymentStatus;
+  upiId?: string;
+  upiPayeeName?: string;
+  paymentQrCode?: string;
   createdAt: string;
   hasIncompleteOrders?: boolean;
   incompleteOrders?: IncompleteOrderItem[];
