@@ -3,6 +3,7 @@ import { User, UserRole } from '@/types/auth';
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
   user: User;
 }
@@ -15,6 +16,7 @@ interface RawUserResponse extends Partial<User> {
 
 interface RawLoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
   user: RawUserResponse;
 }
@@ -24,6 +26,20 @@ export const authApi = {
     const res = await apiClient<RawLoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+    return {
+      ...res,
+      user: {
+        ...(res.user as User),
+        contactNumber: res.user?.contactNumber || res.user?.contact_number,
+      },
+    };
+  },
+
+  refreshToken: async (refreshToken: string): Promise<LoginResponse> => {
+    const res = await apiClient<RawLoginResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
     return {
       ...res,

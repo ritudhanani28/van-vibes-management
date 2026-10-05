@@ -73,6 +73,57 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  const refreshToken = localStorage.getItem('vv_mgmt_refresh_token');
+  if (!refreshToken) return null;
+
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        throw new Error('Refresh failed');
+      }
+
+      const data = await res.json();
+      if (data?.access_token) {
+        localStorage.setItem('vv_mgmt_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('vv_mgmt_refresh_token', data.refresh_token);
+        }
+        return data.access_token as string;
+      }
+      return null;
+    } catch {
+      localStorage.removeItem('vv_mgmt_token');
+      localStorage.removeItem('vv_mgmt_refresh_token');
+      localStorage.removeItem('vv_mgmt_auth');
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -98,7 +149,7 @@ export async function apiClient<T>(
       headers,
       cache: 'no-store',
     });
-  } catch (err: unknown) {
+  } catch {
     // Graceful network and server unreachable error handling
     throw new ApiError(
       'Unable to connect to the server. Please try again.',
@@ -107,11 +158,33 @@ export async function apiClient<T>(
   }
 
   if (response.status === 401 && typeof window !== 'undefined') {
-    // If not already on login page, clear token and redirect
-    if (window.location.pathname !== '/login') {
-      localStorage.removeItem('vv_mgmt_token');
-      localStorage.removeItem('vv_mgmt_auth');
-      window.location.replace('/login');
+    const isAuthRoute = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh');
+    if (!isAuthRoute) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        // Retry the request with the refreshed 7-day access token
+        const retryHeaders = {
+          ...headers,
+          Authorization: `Bearer ${newToken}`,
+        };
+        try {
+          response = await fetch(url, {
+            ...options,
+            headers: retryHeaders,
+            cache: 'no-store',
+          });
+        } catch {
+          throw new ApiError('Unable to connect to the server. Please try again.', 0);
+        }
+      } else {
+        // If refresh failed and not on login page, clear credentials and redirect
+        if (window.location.pathname !== '/login') {
+          localStorage.removeItem('vv_mgmt_token');
+          localStorage.removeItem('vv_mgmt_refresh_token');
+          localStorage.removeItem('vv_mgmt_auth');
+          window.location.replace('/login');
+        }
+      }
     }
   }
 

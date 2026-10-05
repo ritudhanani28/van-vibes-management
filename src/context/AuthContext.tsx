@@ -30,19 +30,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     async function initSession() {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('vv_mgmt_token') : null;
+        let token = typeof window !== 'undefined' ? localStorage.getItem('vv_mgmt_token') : null;
+        const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('vv_mgmt_refresh_token') : null;
+
+        if (!token && refreshToken) {
+          try {
+            const refreshRes = await authApi.refreshToken(refreshToken);
+            token = refreshRes.access_token;
+            localStorage.setItem('vv_mgmt_token', refreshRes.access_token);
+            if (refreshRes.refresh_token) {
+              localStorage.setItem('vv_mgmt_refresh_token', refreshRes.refresh_token);
+            }
+          } catch {
+            token = null;
+          }
+        }
+
         if (token) {
-          const profile = await authApi.getMe();
-          if (!isMounted) return;
-          const avatar = profile.role === 'ADMIN' ? '👨‍💼' : '👨‍🍳';
-          setUser({ ...profile, avatar });
-          wsManager.connect(token);
+          try {
+            const profile = await authApi.getMe();
+            if (!isMounted) return;
+            const avatar = profile.role === 'ADMIN' ? '👨‍💼' : '👨‍🍳';
+            setUser({ ...profile, avatar });
+            wsManager.connect(token);
+          } catch (err) {
+            if (refreshToken) {
+              try {
+                const refreshRes = await authApi.refreshToken(refreshToken);
+                localStorage.setItem('vv_mgmt_token', refreshRes.access_token);
+                if (refreshRes.refresh_token) {
+                  localStorage.setItem('vv_mgmt_refresh_token', refreshRes.refresh_token);
+                }
+                const profile = await authApi.getMe();
+                if (!isMounted) return;
+                const avatar = profile.role === 'ADMIN' ? '👨‍💼' : '👨‍🍳';
+                setUser({ ...profile, avatar });
+                wsManager.connect(refreshRes.access_token);
+                return;
+              } catch {
+                // Refresh failed
+              }
+            }
+            throw err;
+          }
         }
       } catch (err) {
         if (typeof window !== 'undefined') {
           const errMsg = err instanceof Error ? err.message : '';
           if (errMsg.includes('401') || errMsg.includes('Unauthorized') || errMsg.includes('Authentication token')) {
             localStorage.removeItem('vv_mgmt_token');
+            localStorage.removeItem('vv_mgmt_refresh_token');
             localStorage.removeItem('vv_mgmt_auth');
           }
         }
@@ -75,6 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         localStorage.setItem('vv_mgmt_token', res.access_token);
+        if (res.refresh_token) {
+          localStorage.setItem('vv_mgmt_refresh_token', res.refresh_token);
+        }
         localStorage.setItem(
           'vv_mgmt_auth',
           JSON.stringify({
@@ -126,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     wsManager.disconnect();
     try {
       localStorage.removeItem('vv_mgmt_token');
+      localStorage.removeItem('vv_mgmt_refresh_token');
       localStorage.removeItem('vv_mgmt_auth');
     } catch {
       // ignore
