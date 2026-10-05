@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { authApi } from '@/api/auth';
 import { User, UserRole } from '@/types/auth';
 import { CustomSelect } from '@/components/ui/CustomSelect';
+import { FieldError, FormError } from '@/components/ui/FieldError';
+import { validateEmailField, validatePhoneField, validatePasswordField } from '@/lib/validation';
 import {
   ChefHat,
   Plus,
@@ -149,24 +151,27 @@ export default function ChefManagementPage() {
       errors.name = 'Chef name must be at least 2 characters.';
     }
 
-    if (!trimmedEmail) {
-      errors.email = 'Please enter email address.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      errors.email = 'Please enter a valid email address (e.g. chef@vaanvibes.in).';
+    const emailErr = validateEmailField(trimmedEmail, true);
+    if (emailErr) {
+      errors.email = emailErr;
     }
 
-    const contactErr = validateContactNumber(addContact);
+    const contactErr = validatePhoneField(addContact, true);
     if (contactErr) {
       errors.contact = contactErr;
     }
 
-    const passErr = validatePasswordStrength(addPassword);
+    const passErr = validatePasswordField(addPassword, { minLength: 6, complex: true });
     if (passErr) {
       errors.password = passErr;
     }
 
     if (Object.keys(errors).length > 0) {
       setAddFieldErrors(errors);
+      if (errors.name) document.getElementById('chef_account_name')?.focus();
+      else if (errors.email) document.getElementById('chef_email_address')?.focus();
+      else if (errors.contact) document.getElementById('chef_phone_contact')?.focus();
+      else if (errors.password) document.getElementById('chef_account_password')?.focus();
       return;
     }
 
@@ -520,16 +525,17 @@ export default function ChefManagementPage() {
               </button>
             </div>
 
-            {/* Error Message */}
+
+
+            {/* Form */}
             {addError && (
-              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>{addError}</span>
+              <div className="mx-5 mt-4">
+                <FormError message={addError} id="add-chef-form-error" />
               </div>
             )}
 
-            {/* Form */}
             <form
+              noValidate
               onSubmit={handleAddChef}
               autoComplete="off"
               className="p-5 space-y-4 overflow-y-auto flex-1 text-xs"
@@ -601,6 +607,8 @@ export default function ChefManagementPage() {
                   data-lpignore="true"
                   data-form-type="other"
                   required
+                  aria-invalid={!!addFieldErrors.email}
+                  aria-describedby={addFieldErrors.email ? "add-chef-email-error" : undefined}
                   placeholder="chef@vaanvibes.in"
                   value={addEmail}
                   onChange={(e) => {
@@ -614,12 +622,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {addFieldErrors.email && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{addFieldErrors.email}</span>
-                  </p>
-                )}
+                <FieldError message={addFieldErrors.email} id="add-chef-email-error" />
               </div>
 
               {/* Contact Number */}
@@ -639,6 +642,8 @@ export default function ChefManagementPage() {
                   inputMode="numeric"
                   maxLength={10}
                   required
+                  aria-invalid={!!addFieldErrors.contact}
+                  aria-describedby={addFieldErrors.contact ? "add-chef-contact-error" : undefined}
                   placeholder="10-digit mobile number"
                   value={addContact}
                   onChange={(e) => {
@@ -652,12 +657,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {addFieldErrors.contact && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{addFieldErrors.contact}</span>
-                  </p>
-                )}
+                <FieldError message={addFieldErrors.contact} id="add-chef-contact-error" />
               </div>
 
               {/* Role Dropdown - strictly Chef */}
@@ -692,6 +692,8 @@ export default function ChefManagementPage() {
                   autoComplete="new-password"
                   data-lpignore="true"
                   required
+                  aria-invalid={!!addFieldErrors.password}
+                  aria-describedby={addFieldErrors.password ? "add-chef-password-error" : undefined}
                   placeholder="••••••••"
                   value={addPassword}
                   onChange={(e) => {
@@ -705,12 +707,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {addFieldErrors.password && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{addFieldErrors.password}</span>
-                  </p>
-                )}
+                <FieldError message={addFieldErrors.password} id="add-chef-password-error" />
                 <p className="text-[10px] text-brand-green/60 leading-relaxed">
                   Must contain uppercase, lowercase, number, and special character.
                 </p>
@@ -780,14 +777,13 @@ export default function ChefManagementPage() {
 
             {/* Error Message */}
             {editError && (
-              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>{editError}</span>
+              <div className="mx-5 mt-4">
+                <FormError message={editError} id="edit-chef-form-error" />
               </div>
             )}
 
             {/* Form */}
-            <form onSubmit={handleSaveEditChef} autoComplete="off" className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+            <form noValidate onSubmit={handleSaveEditChef} autoComplete="off" className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* Name */}
               <div className="space-y-1">
                 <label className="font-bold text-brand-green flex items-center gap-1">
@@ -796,7 +792,10 @@ export default function ChefManagementPage() {
                 </label>
                 <input
                   type="text"
+                  id="edit_chef_name"
                   required
+                  aria-invalid={!!editFieldErrors.name}
+                  aria-describedby={editFieldErrors.name ? "edit-chef-name-error" : undefined}
                   value={editName}
                   onChange={(e) => {
                     setEditName(e.target.value);
@@ -809,12 +808,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {editFieldErrors.name && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{editFieldErrors.name}</span>
-                  </p>
-                )}
+                <FieldError message={editFieldErrors.name} id="edit-chef-name-error" />
               </div>
 
               {/* Email */}
@@ -825,7 +819,10 @@ export default function ChefManagementPage() {
                 </label>
                 <input
                   type="email"
+                  id="edit_chef_email"
                   required
+                  aria-invalid={!!editFieldErrors.email}
+                  aria-describedby={editFieldErrors.email ? "edit-chef-email-error" : undefined}
                   value={editEmail}
                   onChange={(e) => {
                     setEditEmail(e.target.value);
@@ -838,12 +835,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {editFieldErrors.email && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{editFieldErrors.email}</span>
-                  </p>
-                )}
+                <FieldError message={editFieldErrors.email} id="edit-chef-email-error" />
               </div>
 
               {/* Contact Number */}
@@ -857,9 +849,12 @@ export default function ChefManagementPage() {
                 </div>
                 <input
                   type="tel"
+                  id="edit_chef_contact"
                   inputMode="numeric"
                   maxLength={10}
                   required
+                  aria-invalid={!!editFieldErrors.contact}
+                  aria-describedby={editFieldErrors.contact ? "edit-chef-contact-error" : undefined}
                   placeholder="10-digit mobile number"
                   value={editContact}
                   onChange={(e) => {
@@ -873,12 +868,7 @@ export default function ChefManagementPage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                   }`}
                 />
-                {editFieldErrors.contact && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{editFieldErrors.contact}</span>
-                  </p>
-                )}
+                <FieldError message={editFieldErrors.contact} id="edit-chef-contact-error" />
               </div>
 
               {/* Role Dropdown - strictly Chef */}

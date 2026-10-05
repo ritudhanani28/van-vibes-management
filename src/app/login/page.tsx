@@ -2,7 +2,9 @@
 
 import React, { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
+import { FieldError, FormError } from '@/components/ui/FieldError';
+import { validateEmailField, validatePasswordField } from '@/lib/validation';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -18,18 +20,10 @@ export default function LoginPage() {
 
   const validateField = (field: 'email' | 'password', value: string): string | undefined => {
     if (field === 'email') {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return 'Please enter your email.';
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-        return 'Please enter a valid email address.';
-      }
+      return validateEmailField(value, true) || undefined;
     }
     if (field === 'password') {
-      if (!value) {
-        return 'Please enter your password.';
-      }
+      return validatePasswordField(value) || undefined;
     }
     return undefined;
   };
@@ -133,13 +127,7 @@ export default function LoginPage() {
 
           {/* General Error Message Banner */}
           {generalError && (
-            <div
-              role="alert"
-              className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{generalError}</span>
-            </div>
+            <FormError message={generalError} id="login-general-error" />
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
@@ -172,12 +160,7 @@ export default function LoginPage() {
                   }`}
                 />
               </div>
-              {fieldErrors.email && (
-                <p id="login-email-error" className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                  <span>{fieldErrors.email}</span>
-                </p>
-              )}
+              <FieldError message={fieldErrors.email} id="login-email-error" />
             </div>
 
             {/* Password Field with Toggle (👁️) */}
@@ -218,12 +201,7 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {fieldErrors.password && (
-                <p id="login-password-error" className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                  <span>{fieldErrors.password}</span>
-                </p>
-              )}
+              <FieldError message={fieldErrors.password} id="login-password-error" />
             </div>
 
             {/* Submit Button */}

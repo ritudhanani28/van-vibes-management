@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { FieldError, FormError } from '@/components/ui/FieldError';
+import { validatePhoneField } from '@/lib/validation';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '@/api/auth';
 import {
@@ -69,12 +71,15 @@ export default function ProfilePage() {
       errors.name = 'Full Name must be at least 2 characters long.';
     }
 
-    if (trimmedContact && !/^\d{10}$/.test(trimmedContact)) {
-      errors.contact = 'Phone number must contain exactly 10 digits.';
+    if (trimmedContact) {
+      const contactErr = validatePhoneField(trimmedContact, false);
+      if (contactErr) errors.contact = contactErr;
     }
 
     if (Object.keys(errors).length > 0) {
       setProfileFieldErrors(errors);
+      if (errors.name) document.getElementById('profile_full_name')?.focus();
+      else if (errors.contact) document.getElementById('profile_contact_number')?.focus();
       return;
     }
 
@@ -137,6 +142,9 @@ export default function ProfilePage() {
 
     if (Object.keys(errors).length > 0) {
       setPasswordFieldErrors(errors);
+      if (errors.current) document.getElementById('current_password_input')?.focus();
+      else if (errors.new) document.getElementById('new_password_input')?.focus();
+      else if (errors.confirm) document.getElementById('confirm_new_password_input')?.focus();
       return;
     }
 
@@ -218,7 +226,7 @@ export default function ProfilePage() {
 
           {/* Either Edit Form or View Grid */}
           {isEditingProfile ? (
-            <form onSubmit={handleSaveProfile} className="space-y-4">
+            <form noValidate onSubmit={handleSaveProfile} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-brand-beige-dark/40">
                 <span className="text-xs font-bold text-brand-green uppercase tracking-wider">
                   Edit Profile Details
@@ -241,8 +249,11 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="text"
+                    id="profile_full_name"
                     autoComplete="name"
                     required
+                    aria-invalid={!!profileFieldErrors.name}
+                    aria-describedby={profileFieldErrors.name ? "profile-name-error" : undefined}
                     placeholder="e.g. Admin Manager"
                     value={editName}
                     onChange={(e) => {
@@ -255,12 +266,7 @@ export default function ProfilePage() {
                         : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                     }`}
                   />
-                  {profileFieldErrors.name && (
-                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                      <span>{profileFieldErrors.name}</span>
-                    </p>
-                  )}
+                  <FieldError message={profileFieldErrors.name} id="profile-name-error" />
                 </div>
 
                 {/* Contact Number Input */}
@@ -270,9 +276,12 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="tel"
+                    id="profile_contact_number"
                     autoComplete="tel"
                     inputMode="numeric"
                     maxLength={10}
+                    aria-invalid={!!profileFieldErrors.contact}
+                    aria-describedby={profileFieldErrors.contact ? "profile-contact-error" : undefined}
                     placeholder="e.g. 9876543210"
                     value={editContact}
                     onChange={(e) => {
@@ -285,12 +294,7 @@ export default function ProfilePage() {
                         : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white'
                     }`}
                   />
-                  {profileFieldErrors.contact && (
-                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                      <span>{profileFieldErrors.contact}</span>
-                    </p>
-                  )}
+                  <FieldError message={profileFieldErrors.contact} id="profile-contact-error" />
                 </div>
 
                 {/* Email (Read-only) */}
@@ -407,14 +411,17 @@ export default function ProfilePage() {
               </div>
             )}
 
-            <form onSubmit={handleChangePassword} className="space-y-4">
+            <form noValidate onSubmit={handleChangePassword} className="space-y-4">
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-brand-green">
                   Current Password
                 </label>
                 <input
                   type="password"
+                  id="current_password_input"
                   autoComplete="current-password"
+                  aria-invalid={!!passwordFieldErrors.current}
+                  aria-describedby={passwordFieldErrors.current ? "current-password-error" : undefined}
                   placeholder="Enter current password"
                   value={currentPassword}
                   onChange={(e) => {
@@ -427,12 +434,7 @@ export default function ProfilePage() {
                       : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
                   }`}
                 />
-                {passwordFieldErrors.current && (
-                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                    <span>{passwordFieldErrors.current}</span>
-                  </p>
-                )}
+                <FieldError message={passwordFieldErrors.current} id="current-password-error" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -442,7 +444,10 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="password"
+                    id="new_password_input"
                     autoComplete="new-password"
+                    aria-invalid={!!passwordFieldErrors.new}
+                    aria-describedby={passwordFieldErrors.new ? "new-password-error" : undefined}
                     placeholder="Min. 6 characters"
                     value={newPassword}
                     onChange={(e) => {
@@ -455,12 +460,7 @@ export default function ProfilePage() {
                         : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
                     }`}
                   />
-                  {passwordFieldErrors.new && (
-                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                      <span>{passwordFieldErrors.new}</span>
-                    </p>
-                  )}
+                  <FieldError message={passwordFieldErrors.new} id="new-password-error" />
                 </div>
 
                 <div className="space-y-1">
@@ -469,7 +469,10 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="password"
+                    id="confirm_new_password_input"
                     autoComplete="new-password"
+                    aria-invalid={!!passwordFieldErrors.confirm}
+                    aria-describedby={passwordFieldErrors.confirm ? "confirm-password-error" : undefined}
                     placeholder="Repeat new password"
                     value={confirmNewPassword}
                     onChange={(e) => {
@@ -482,12 +485,7 @@ export default function ProfilePage() {
                         : 'border-brand-beige-dark focus:border-brand-green focus:ring-2 focus:ring-brand-green/20'
                     }`}
                   />
-                  {passwordFieldErrors.confirm && (
-                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-1 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                      <span>{passwordFieldErrors.confirm}</span>
-                    </p>
-                  )}
+                  <FieldError message={passwordFieldErrors.confirm} id="confirm-password-error" />
                 </div>
               </div>
 
