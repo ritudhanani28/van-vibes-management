@@ -1,6 +1,7 @@
 'use client';
 import { CAFE_BRAND } from '@/constants/brand';
 import { VAN_VIBES_LOGO_DATA_URL } from '@/constants/logo';
+import { UPI_ID, UPI_PAYMENT_QR_DATA_URL } from '@/constants/payment';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -388,6 +389,43 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
               max-width: 190px !important;
               object-fit: contain !important;
               background: transparent !important;
+            }
+            .bill-print-qr-container {
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: center !important;
+              align-items: center !important;
+              text-align: center !important;
+              margin: 10px auto 6px auto !important;
+              padding-top: 6px !important;
+              width: 100% !important;
+              background: transparent !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .bill-print-qr {
+              display: block !important;
+              margin: 0 auto !important;
+              width: 110px !important;
+              height: 110px !important;
+              max-width: 120px !important;
+              object-fit: contain !important;
+              background: #ffffff !important;
+            }
+            .bill-print-qr-title {
+              font-size: 11px !important;
+              font-weight: 800 !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.05em !important;
+              margin-bottom: 4px !important;
+              color: #18312B !important;
+            }
+            .bill-print-qr-upi {
+              font-family: monospace !important;
+              font-size: 10px !important;
+              font-weight: 700 !important;
+              margin-top: 4px !important;
+              color: #18312B !important;
             }
           </style>
         </head>
@@ -882,6 +920,26 @@ export function BillModal({ orderId, sessionId, onClose, onSettled }: Props) {
                     Use the <strong>Generate Final Bill</strong> action in the bottom panel below to conclude this session. The physical table will immediately become <strong>AVAILABLE</strong> for new guests while payment remains pending settlement.
                   </p>
                 </div>
+              )}
+
+              {/* Official UPI Scan & Pay QR Code: Attached ONLY after order is complete and bill is generated */}
+              {(isBillGenerated || isPaid) && (
+                <div className="bill-print-qr-container text-center pt-3 pb-2 border-t border-dashed border-brand-beige-dark space-y-1">
+                <p className="bill-print-qr-title text-[11px] font-black uppercase tracking-wider text-brand-green/80">
+                  Scan &amp; Pay
+                </p>
+                <div className="flex justify-center items-center py-0.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={UPI_PAYMENT_QR_DATA_URL}
+                    alt="UPI Scan & Pay QR Code"
+                    className="bill-print-qr w-28 h-28 sm:w-32 sm:h-32 object-contain mx-auto rounded-lg border border-brand-beige-dark/50 p-1 bg-white shadow-2xs"
+                  />
+                </div>
+                <p className="bill-print-qr-upi text-[10px] sm:text-[11px] font-mono font-bold text-brand-green tracking-wide">
+                  UPI ID: {UPI_ID}
+                </p>
+              </div>
               )}
 
               {/* Footer Stamp */}
