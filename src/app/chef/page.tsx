@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { OrderCard } from '@/features/orders/components/OrderCard';
 import { ordersApi } from '@/api/orders';
 import { Order, OrderStatus } from '@/types/cafe';
+import { getOrderChefItems } from '@/utils/kot';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import {
   AlertSound,
@@ -196,12 +197,16 @@ export default function ChefKDSPage() {
     loadOrders();
   };
 
-  // Kitchen orders:
-  // 1. Incoming Orders: Orders accepted by Admin (status === ACCEPTED) - chef prepares and clicks Done
+  // Kitchen orders (strictly orders containing Chef/Kitchen items):
+  // 1. Incoming Orders: Orders accepted by Admin (status === ACCEPTED) containing kitchen food items
   // 2. Completed / Prepared Orders: Orders marked Done or Completed
-  const incomingOrders = orders.filter((o) => o.status === 'ACCEPTED');
+  const incomingOrders = orders.filter(
+    (o) => o.status === 'ACCEPTED' && getOrderChefItems(o).length > 0
+  );
   const completedOrders = orders.filter(
-    (o) => o.status === 'COMPLETED' || o.status === 'IN_KITCHEN' || o.status === 'SERVED'
+    (o) =>
+      (o.status === 'COMPLETED' || o.status === 'IN_KITCHEN' || o.status === 'SERVED') &&
+      getOrderChefItems(o).length > 0
   );
 
   const currentFilterLabel = DATE_FILTER_OPTIONS.find((o) => o.value === selectedFilter)?.label || 'Today';

@@ -7,6 +7,7 @@ import { BillModal } from '@/features/billing/components/BillModal';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { Order, OrderStatus, ActivityFilterOption, isOrderActive, isOrderInactive } from '@/types/cafe';
 import { ordersApi } from '@/api/orders';
+import { canCompleteOrder } from '@/utils/kot';
 import { wsManager } from '@/services/websocket/WebSocketManager';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -231,6 +232,18 @@ export default function OrdersPage() {
       if (nextStatus === 'ACCEPTED') {
         await ordersApi.acceptOrder(orderId);
       } else if (nextStatus === 'COMPLETED') {
+        const ord = orders.find((o) => o.id === orderId);
+        if (ord) {
+          const check = canCompleteOrder(ord);
+          if (!check.canComplete) {
+            const reason = check.isChefPending && check.isKotPending
+              ? "Both Kitchen and KOT preparations are pending."
+              : check.isChefPending
+              ? "Chef kitchen preparation is still pending."
+              : "KOT beverage/dessert preparation is still pending.";
+            throw new Error(`Cannot complete order: ${reason}`);
+          }
+        }
         await ordersApi.completeOrder(orderId);
       } else {
         await ordersApi.updateStatus(orderId, nextStatus);
@@ -365,7 +378,6 @@ export default function OrdersPage() {
   // CustomSelect Options Definitions
   const activityOptions = [
     { value: 'ACTIVE', label: `Active (${activeCount})` },
-    { value: 'ALL', label: `All Orders (${allCount})` },
     { value: 'INACTIVE', label: `Inactive (${inactiveCount})` },
   ];
 
@@ -472,80 +484,13 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* 3-State Segmented Control bar: Active / All / Inactive */}
-        <div className="flex items-center justify-between gap-3 flex-wrap border-b border-brand-beige-dark/60 pb-3">
-          <div className="flex items-center p-1 rounded-2xl bg-white border border-brand-beige-dark shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setActivityFilter('ACTIVE')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                activityFilter === 'ACTIVE'
-                  ? 'bg-brand-green text-brand-beige shadow-xs'
-                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
-              }`}
-            >
-              <span>Active</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  activityFilter === 'ACTIVE'
-                    ? 'bg-brand-beige text-brand-green font-black'
-                    : 'bg-brand-beige-light text-brand-green/70'
-                }`}
-              >
-                {activeCount}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActivityFilter('ALL')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                activityFilter === 'ALL'
-                  ? 'bg-brand-green text-brand-beige shadow-xs'
-                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
-              }`}
-            >
-              <span>All</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  activityFilter === 'ALL'
-                    ? 'bg-brand-beige text-brand-green font-black'
-                    : 'bg-brand-beige-light text-brand-green/70'
-                }`}
-              >
-                {allCount}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActivityFilter('INACTIVE')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                activityFilter === 'INACTIVE'
-                  ? 'bg-brand-green text-brand-beige shadow-xs'
-                  : 'text-brand-green/70 hover:text-brand-green hover:bg-brand-beige/50'
-              }`}
-            >
-              <span>Inactive</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  activityFilter === 'INACTIVE'
-                    ? 'bg-brand-beige text-brand-green font-black'
-                    : 'bg-brand-beige-light text-brand-green/70'
-                }`}
-              >
-                {inactiveCount}
-              </span>
-            </button>
-          </div>
-
+        {/* Order Count Summary Bar */}
+        <div className="flex items-center justify-end gap-3 border-b border-brand-beige-dark/60 pb-2">
           <div className="text-xs text-brand-green/60 font-medium">
             Showing <strong className="text-brand-green font-bold">{filteredOrders.length}</strong> of{' '}
             {activityFilter === 'ACTIVE'
               ? `${activeCount} active`
-              : activityFilter === 'INACTIVE'
-              ? `${inactiveCount} inactive`
-              : `${allCount} total`}{' '}
+              : `${inactiveCount} inactive`}{' '}
             orders
           </div>
         </div>

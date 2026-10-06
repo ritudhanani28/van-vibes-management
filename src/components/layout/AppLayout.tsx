@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { AccessDenied } from '@/components/ui/AccessDenied';
 import {
   LayoutDashboard,
+  ReceiptText,
   ChefHat,
   ShoppingBag,
   Receipt,
@@ -37,6 +38,14 @@ const NAV_ITEMS: NavItem[] = [
     href: '/dashboard',
     icon: LayoutDashboard,
     roles: ['ADMIN'],
+  },
+  // KOT Barista & Beverage Line (Admin Only)
+  {
+    name: 'KOT',
+    href: '/kot',
+    icon: ReceiptText,
+    roles: ['ADMIN'],
+    badge: 'Live',
   },
   // Chef Primary KDS
   {
